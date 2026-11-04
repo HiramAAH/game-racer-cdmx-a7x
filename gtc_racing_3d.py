@@ -8,6 +8,7 @@ Controles:
   Flechas / WASD : acelerar, frenar/reversa, girar
   ESPACIO        : freno de mano (derrape)
   SHIFT / X      : nitro
+  CTRL           : cambiar de cancion (soundtrack de noche)
   C              : cambiar camara (persecucion / capo)
   N              : horario (dia / atardecer / noche)
   ENTER          : elegir piloto / saltar la cinematica
@@ -1553,8 +1554,9 @@ class FX:
         d[:, 2] -= nz * 1.2
         d /= np.linalg.norm(d, axis=1, keepdims=True)
         sp = rng.uniform(4, 9 + min(strength, 20) * 0.6, (k, 1))
-        col = np.column_stack([np.ones(k), rng.uniform(0.6, 0.9, k), rng.uniform(0.15, 0.4, k)]) * 1.4
-        self.spawn(np.tile([x, 0.6, z], (k, 1)), d * sp, col, rng.uniform(0.25, 0.6, k), rng.uniform(0.16, 0.3, k), 7)
+        col = np.column_stack([np.ones(k), rng.uniform(0.6, 0.9, k), rng.uniform(0.15, 0.4, k)]) * 2.0
+        self.spawn(np.tile([x, 0.6, z], (k, 1)), d * sp, col, rng.uniform(0.3, 0.7, k), rng.uniform(0.3, 0.55, k), 7)
+        self.spawn([x, 0.7, z], (0, 0, 0), (0.9, 0.6, 0.25), 0.08, 1.6 + min(strength, 15) * 0.12, 4)
 
     def nitro_flame(self, car):
         rng = self.rng
@@ -1576,6 +1578,11 @@ class FX:
     def update(self, dt, t):
         if self.concert:
             self._concert(t)
+        elif len(self.kind):   # sin concierto: solo quedan chispas, nitro y destellos
+            keep = (self.kind == 7) | (self.kind == 8) | (self.kind == 4)
+            if not keep.all():
+                for name in ("p", "v", "c", "life", "maxl", "size", "kind"):
+                    setattr(self, name, getattr(self, name)[keep])
         rng = self.rng
         if not len(self.p):
             return
@@ -2036,61 +2043,6 @@ class Sound:
         w = np.convolve(w, np.ones(12) / 12, "same") * 3
         return self._make(w * np.exp(-np.arange(n) / (n * 0.25)), 0.6)
 
-    def _metal(self):
-        """Loop de metal sintetizado: doble bombo, tarola y riff distorsionado + publico."""
-        sr = self.freq
-        beat = 60 / 150
-        n = int(sr * beat * 8)
-        out = np.zeros(n)
-        rng = np.random.default_rng(4)
-
-        def add(start, wave):
-            s = int(start * sr)
-            e = min(n, s + len(wave))
-            out[s:e] += wave[:e - s]
-        tk = np.arange(int(0.1 * sr)) / sr
-        kick = np.sin(TAU * (45 * tk + 10 * (1 - np.exp(-tk * 30)))) * np.exp(-tk * 30)
-        for k in range(32):
-            add(k * beat / 4, kick * 0.7)
-        ts = np.arange(int(0.15 * sr)) / sr
-        snare = (rng.normal(0, 1, len(ts)) * 0.6 + np.sin(TAU * 190 * ts) * 0.4) * np.exp(-ts * 22)
-        for k in (1, 3, 5, 7):
-            add(k * beat, snare * 0.8)
-        riff = [82.4, 82.4, 98.0, 82.4, 110.0, 82.4, 116.5, 110.0] * 2
-        te = np.arange(int(beat / 2 * sr)) / sr
-        for k, f in enumerate(riff):
-            w = (np.sign(np.sin(TAU * f * te)) + 0.7 * np.sign(np.sin(TAU * f * 1.5 * te))
-                 + 0.4 * ((te * f * 2) % 1 * 2 - 1))
-            add(k * beat / 2, np.tanh(w * 2.5) * np.exp(-te * (6 if k % 2 else 3)) * 0.35)
-        out += np.convolve(rng.normal(0, 1, n), np.ones(40) / 40, "same") * 0.6
-        out /= np.max(np.abs(out)) + 1e-6
-        return self._make(out, 0.5)
-
-    def _load_song(self):
-        """Busca la cancion del concierto en la carpeta music/ (prefiere 'Hail to the King')."""
-        folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "music")
-        try:
-            files = sorted(os.listdir(folder))
-        except OSError:
-            return None
-        audio = [f for f in files if f.lower().endswith((".mp3", ".ogg", ".wav", ".flac"))]
-        audio.sort(key=lambda f: 0 if "hail" in f.lower() else 1)
-        for f in audio:
-            try:
-                snd = pygame.mixer.Sound(os.path.join(folder, f))
-                self.song_name = os.path.splitext(f)[0]
-                return snd
-            except pygame.error:
-                continue
-        return None
-
-    def set_concert(self, target, dt):
-        """Sube/baja el volumen del concierto de forma suave (sin saltos bruscos)."""
-        if not self.ok:
-            return
-        self.concert_vol += (target - self.concert_vol) * min(1.0, dt * 3.0)
-        self.concert_ch.set_volume(0.0 if self.muted else self.concert_vol)
-
     def _whoosh(self):
         n = int(self.freq * 0.8)
         t = np.arange(n) / self.freq
@@ -2297,10 +2249,16 @@ class Music:
         self.apply_volume()
 
     def next_song(self):
+        """Canción al azar del soundtrack de noche, nunca la misma que acaba de sonar."""
+        tried = set()
         for _ in range(len(self.playlist)):
-            if not self.order:
-                self.order = random.sample(self.playlist, len(self.playlist))
-            path = self.order.pop(0)
+            pool = [p for p in self.playlist if p != getattr(self, "cur", None) and p not in tried] or \
+                   [p for p in self.playlist if p not in tried]
+            if not pool:
+                break
+            path = random.choice(pool)
+            tried.add(path)
+            self.cur = path
             try:
                 pygame.mixer.music.load(path)
                 pygame.mixer.music.play(fade_ms=500)
@@ -2326,9 +2284,6 @@ class Music:
 
 
 # ---------------------------------------------------------------- juego
-CONCERT_NEAR, CONCERT_FAR = 110.0, 450.0   # metros: volumen maximo / silencio
-
-
 def smooth(f):
     f = clamp(f, 0.0, 1.0)
     return f * f * (3 - 2 * f)
@@ -2376,7 +2331,7 @@ class Game:
         self.scene_vao = self.make_vao(scene_arr)
         self.concert_vao = self.make_vao(self.info.pop("concert_mesh"))
         self.fx = FX(ctx, self.prog, self.info)
-        self.tod = 2
+        self.tod = 0          # arranca de dia (N cambia a atardecer / noche)
         quad = ctx.buffer(np.array([-1, -1, 1, -1, -1, 1, 1, 1], np.float32).tobytes())
         self.sky_vao = ctx.vertex_array(self.sky_prog, [(quad, "2f", "in_pos")])
         self.hud_vao = ctx.vertex_array(self.hud_prog, [(quad, "2f", "in_pos")])
@@ -2398,7 +2353,6 @@ class Game:
         self.minimap_pts = self.make_minimap()
         self.cam_mode = 0
         self.t = 0.0
-        self.concert_level = 0.0
         self.sel = len(PILOTS) - 1
         self.diff = 1
         self.new_race(attract=True)
@@ -2442,6 +2396,9 @@ class Game:
         if self.state == "intro":
             self.build_intro()
         self.update_camera(0.0)
+        # de noche cada carrera arranca con una cancion nueva al azar (tambien al reiniciar con R)
+        if not attract and self.tod == 2 and self.music.mode == "playlist":
+            self.music.next_song()
 
     def build_intro(self):
         tr = self.track
@@ -2592,12 +2549,15 @@ class Game:
             self.sound.update_engine(self.player.vf, self.player.throttle)
 
     def music_mode(self):
-        """Menu: cancion propia. Antes de arrancar: publico. Carrera: de noche el soundtrack de A7X, si no la propia."""
+        """Menu: cancion propia. De noche el soundtrack de A7X arranca desde la cinematica.
+        Dia/tarde: publico antes de arrancar y luego la cancion propia de carrera."""
         if self.state in ("menu", "select"):
             return "menu"
+        if self.tod == 2:
+            return "playlist"
         if self.state in ("intro", "countdown"):
             return "ambience"
-        return "playlist" if self.tod == 2 else "race"
+        return "race"
 
     def update_music(self, dt):
         self.music.set_mode(self.music_mode())
@@ -2901,14 +2861,7 @@ class Game:
         self.text(self.f_small, f"{p.name}  ·  {DIFFS[self.diff][0]}  ·  {TODS[self.tod][0]}", (255, 255, 255),
                   topleft=(30, WIN_H - 40), outline=2)
 
-        mu = self.music
-        if mu.mode == "playlist" and mu.now and mu.np_t < 7 and not self.sound.muted:
-            a = int(255 * clamp(min(mu.np_t / 0.5, (7 - mu.np_t) / 1.0), 0, 1))
-            img = self.f_small.render(f"♪  AVENGED SEVENFOLD  -  {mu.now}  (8-bit)  ♪", True, (255, 220, 60))
-            img.set_alpha(a)
-            bar = pygame.Rect(WIN_W // 2 - img.get_width() // 2 - 14, WIN_H - 52, img.get_width() + 28, 36)
-            pygame.draw.rect(h, (0, 0, 0, int(a * 0.6)), bar, border_radius=10)
-            h.blit(img, img.get_rect(center=bar.center))
+        self.draw_song_banner(WIN_H - 52)
         if self.state == "countdown":
             n = int(self.countdown)
             box = pygame.Rect(WIN_W // 2 - 150, 40, 300, 100)
@@ -2946,7 +2899,7 @@ class Game:
             self.text(self.f_mid, "Pulsa ENTER para elegir piloto", (255, 255, 255), center=(WIN_W // 2, 400))
         lines = [f"{LAPS} vueltas  -  6 pilotos",
                  "Flechas / WASD: conducir     ESPACIO: freno de mano     SHIFT: nitro",
-                 "C: cámara     N: horario     M: sonido     R: reiniciar     ESC: salir"]
+                 "C: cámara     N: horario     CTRL: cambiar canción (noche)     M: sonido     R: reiniciar     ESC: salir"]
         for i, l in enumerate(lines):
             self.text(self.f_small, l, (240, 240, 240), center=(WIN_W // 2, 500 + i * 32), outline=2)
 
@@ -3049,6 +3002,19 @@ class Game:
             fade.fill((0, 0, 0, int(255 * (1 - lt / 0.3))))
             h.blit(fade, (0, 0))
         self.text(self.f_tiny, "ENTER: saltar", (200, 200, 200), topright=(WIN_W - 20, WIN_H - 30), outline=0)
+        self.draw_song_banner(22)
+
+    def draw_song_banner(self, y):
+        """Letrero con la cancion de A7X que esta sonando (unos segundos al empezar cada una)."""
+        h = self.hud
+        mu = self.music
+        if mu.mode == "playlist" and mu.now and mu.np_t < 7 and not self.sound.muted:
+            a = int(255 * clamp(min(mu.np_t / 0.5, (7 - mu.np_t) / 1.0), 0, 1))
+            img = self.f_small.render(f"♪  AVENGED SEVENFOLD  -  {mu.now}  (8-bit)  ♪", True, (255, 220, 60))
+            img.set_alpha(a)
+            bar = pygame.Rect(WIN_W // 2 - img.get_width() // 2 - 14, y, img.get_width() + 28, 36)
+            pygame.draw.rect(h, (0, 0, 0, int(a * 0.6)), bar, border_radius=10)
+            h.blit(img, img.get_rect(center=bar.center))
 
     def draw(self):
         self.render3d()
@@ -3102,6 +3068,10 @@ class Game:
             self.cam_mode = 1 - self.cam_mode
         elif key == pygame.K_n:
             self.tod = (self.tod + 1) % len(TODS)
+        elif key in (pygame.K_LCTRL, pygame.K_RCTRL):
+            # solo cambia el soundtrack de A7X (noche, en carrera); dia y tarde mantienen su cancion
+            if self.music.mode == "playlist":
+                self.music.next_song()
         elif key == pygame.K_m:
             self.sound.muted = not self.sound.muted
         return True
