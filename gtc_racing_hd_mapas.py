@@ -20,6 +20,11 @@ PISTAS
                        a la Revolucion (Fan Fest), sube a la Basilica, regresa por Insurgentes y entra al bosque
                        rodeando el Castillo. Rampas de turbo, banderines, balones gigantes y, de noche, fuegos
                        artificiales en toda la ruta. Soundtrack de noche: carpeta "music_mundial".
+  SAN LUIS POTOSÍ      Feria de la Enchilada, 9.4 km: sale del Jardin Hidalgo de Soledad, carretera 57 con sus
+                       puentes vehiculares (vigas a la vista), Coronel Romero (Cruz Roja, Politecnica, Hospital
+                       del Nino y la Mujer), periferico, Parque Tangamanga, Salvador Nava, centro historico
+                       (Catedral, Caja del Agua), Rio Santiago, Acceso Norte y Av. Soledad. De noche: baile,
+                       rueda de la fortuna y carrusel girando, castillo pirotecnico y cohetes. Musica: "music_feria".
 
 COMO AGREGAR UNA PISTA NUEVA
   Copia la plantilla PLANTILLA_DE_MAPA, cambia la clave, el nombre y los puntos del trazado (en metros,
@@ -91,7 +96,8 @@ class MapDef:
                  laps=3, ground="pasto", trees=700, city=True, mountains=True, volcanoes=True,
                  extras=("papel",), stands=4, bridges=2, pits=True, builder="auto", venue=None, landmarks=(),
                  urban=False, ped_bridges=0, fans=0.75, signs=None, band_sign=10, music_dir="music",
-                 palette=None, fireworks=False, pads=0, city_margin=750.0, city_step=34.0, detail_dist=400.0):
+                 palette=None, fireworks=False, pads=0, city_margin=750.0, city_step=34.0, detail_dist=400.0,
+                 osm=None, datum=None):
         self.key, self.name, self.subtitle = key, name, subtitle
         self.control, self.scale = list(control), scale
         self.stadium, self.stadium_scale = stadium, stadium_scale
@@ -108,6 +114,7 @@ class MapDef:
         self.venue_tag = (venue or {}).get("tag", "EN VIVO")
         self.palette, self.fireworks, self.pads = palette, fireworks, pads
         self.city_margin, self.city_step, self.detail_dist = city_margin, city_step, detail_dist
+        self.osm, self.datum = osm, datum
         self.length = None
 
     def w(self, p):
@@ -135,6 +142,18 @@ CHAPULTEPEC_ROUTE = [
     (452, 368), (440, 420), (428, 470), (410, 510), (390, 550), (372, 590), (358, 625), (350, 655), (343, 685),
     (336, 708), (320, 717), (290, 719), (255, 723), (220, 730), (190, 737), (150, 738), (100, 736), (60, 735),
     (25, 734), (-5, 740), (-35, 748), (-62, 738), (-78, 714), (-70, 690), (-45, 680), (-15, 683), (15, 686)]
+
+# San Luis Potosi (1 px = 5.5 m): sale del Jardin Hidalgo de Soledad por Zaragoza a la carretera 57 (puentes
+# vehiculares), Coronel Romero, periferico al Tangamanga, Salvador Nava, Mariano Jimenez, Damian Carmona,
+# Rio Santiago, Acceso Norte y regresa por Av. Soledad / Av. Hidalgo.
+SLP_ROUTE = [
+    (746, 258), (744, 278), (730, 287), (712, 286), (686, 289), (660, 297), (640, 312), (624, 335), (616, 365),
+    (614, 400), (614, 450), (615, 500), (616, 550), (617, 600), (611, 628), (588, 642), (545, 660), (505, 672),
+    (478, 667), (460, 659), (444, 657), (434, 666), (430, 684), (429, 705), (431, 735), (425, 756), (398, 761),
+    (360, 761), (333, 755), (307, 730), (318, 710), (340, 690), (357, 662), (372, 636), (382, 631), (400, 628),
+    (414, 618), (425, 598), (437, 580), (450, 550), (461, 527), (470, 500), (472, 460), (469, 422), (470, 402),
+    (488, 393), (530, 390), (575, 388), (640, 382), (660, 352), (680, 320), (700, 287), (716, 255), (722, 235),
+    (731, 216), (746, 206), (760, 214), (758, 238)]
 
 MAPS = [
     MapDef("cdmx", "ESTADIO GNP SEGUROS", "Autódromo · concierto de Avenged Sevenfold",
@@ -168,6 +187,26 @@ MAPS = [
                   12: ((10, 25, 80), (25, 60, 150), "PASEO DE LA REFORMA", (255, 255, 255)),
                   14: ((5, 5, 5), (0, 60, 40), "HOY: FIESTA MUNDIALISTA", (255, 215, 40))},
            band_sign=10, music_dir="music_mundial"),
+    MapDef("slp", "SAN LUIS POTOSÍ", "Carretera 57 · Tangamanga · Feria de la Enchilada",
+           control=SLP_ROUTE, scale=5.5, laps=1, concert=True, builder="calles", urban=True,
+           ped_bridges=8, fans=0.85, extras=("papel", "guadalupe"), fireworks=True,
+           city_margin=500.0, city_step=38.0, detail_dist=300.0,
+           venue=dict(name="JARDÍN HIDALGO · SOLEDAD", band="FERIA DE LA ENCHILADA", tag="¡QUE SIGA LA FIESTA!",
+                      pos=(815, 300), r0=38, kind="feria"),
+           landmarks=[("vehiculares", (614, 410), (613, 615), 4), ("jardin", (725, 262), 42.0),
+                      ("edificio", (575, 622), 13, rgb(235, 235, 235)), ("edificio", (520, 690), 14, rgb(120, 150, 200)),
+                      ("edificio", (478, 695), 12, rgb(225, 185, 205)),
+                      ("parque", ((285, 650), (445, 778)), 700), ("lago", (382, 722), (60.0, 22.0)),
+                      ("caja_agua", (445, 600)), ("catedral", (500, 532)), ("rio", (470, 500), (470, 404), -1)],
+           signs={1: ((20, 60, 140), (40, 100, 200), "SAN LUIS POTOSÍ", (255, 255, 255)),
+                  2: ((200, 30, 40), (240, 60, 60), "FERIA DE LA ENCHILADA", (255, 220, 60)),
+                  7: ((230, 120, 20), (255, 160, 40), "ENCHILADAS POTOSINAS", (255, 255, 255)),
+                  9: ((0, 100, 60), (20, 140, 90), "SOLEDAD DE G. S.", (255, 255, 255)),
+                  10: ((10, 10, 10), (90, 20, 20), "BAILE DE LA FERIA", (255, 215, 40)),
+                  12: ((230, 230, 240), (255, 255, 255), "HOSPITAL DEL NIÑO Y LA MUJER", (180, 40, 120)),
+                  13: ((235, 235, 235), (255, 255, 255), "UNIVERSIDAD CRUZ ROJA", (210, 20, 30)),
+                  14: ((20, 50, 110), (40, 80, 160), "UNIVERSIDAD POLITÉCNICA", (255, 255, 255))},
+           band_sign=10, music_dir="music_feria"),
     # --- aqui van las pistas nuevas ---
 ]
 
@@ -199,7 +238,11 @@ class MapTrack(base.Track):
             cst = st.mean(axis=0)
             ctrl[sl] = cst * md.scale + (st - cst) * md.stadium_scale
         self.ctrl = ctrl
-        self.pts = base.centripetal_cr(ctrl, base.SPACING)
+        self._setup(base.centripetal_cr(ctrl, base.SPACING))
+
+    def _setup(self, pts):
+        md = self.md
+        self.pts = pts
         self.n = len(self.pts)
         nxt = np.roll(self.pts, -1, axis=0)
         self.d = nxt - self.pts
@@ -809,10 +852,10 @@ def semaforo_hd(g, base_, arm_dir, arm_len, face, k=2):
               mat(M_EMIS, 0.4, 0, 2.5), face)
 
 
-def ped_bridge_hd(g, crowd, rnd, track, i, k_ad, lights, occ):
+def ped_bridge_hd(g, crowd, rnd, track, i, k_ad, lights, occ, half=None):
     """Puente peatonal CDMX: escaleras a los lados, publicidad, techito y gente viendo la carrera."""
     p, nr, t = track.pts[i], track.nrm[i], track.tan[i]
-    half = LIMIT + 6.0
+    half = LIMIT + 6.0 if half is None else half
     deck_y = 6.4
     steel, green = rgb(70, 74, 80), rgb(60, 110, 90)
     sm = mat(M_METAL, 0.45, 0.7)
@@ -830,7 +873,7 @@ def ped_bridge_hd(g, crowd, rnd, track, i, k_ad, lights, occ):
             fcyl(g, q[0], q[1], deck_y + 0.45, deck_y + 3.0, 0.06, steel, sm, seg=5, cap=False)
     obox(g, (a[0] - t[0] * 1.8, deck_y + 3.0, a[1] - t[1] * 1.8), (nr[0] * 2 * half, 0, nr[1] * 2 * half),
          (0, 0.12, 0), (t[0] * 3.6, 0, t[1] * 3.6), rgb(200, 205, 210), mat(M_METAL, 0.4, 0.3))
-    for d in (-half + 0.6, -(LIMIT + 1.4), LIMIT + 1.4, half - 0.6):            # pilares
+    for d in (-half + 0.6, -(half - 4.6), half - 4.6, half - 0.6):              # pilares
         q = p + nr * d
         fcyl(g, q[0], q[1], 0, deck_y, 0.38, rgb(150, 150, 148), mat(M_CONC, 0.8), seg=10, cap=False)
     for side in (-1, 1):                                                       # escaleras hacia afuera
@@ -945,6 +988,13 @@ PLANE_Y = 3.35                     # altura del eje del fuselaje con el tren en 
 
 def flight_pose(fl, t):
     """Posicion de un avion animado: (x, y, z, angulo, cabeceo) o None si esta 'escondido'."""
+    p = _flight_pose(fl, t)
+    if p is None:
+        return None
+    return (p[0], p[1] + fl.get("y0", 0.0), p[2], p[3], p[4])
+
+
+def _flight_pose(fl, t):
     u = (t + fl["ph"]) % fl["T"]
     d = fl["d"]
     ang = math.atan2(d[1], d[0])
@@ -1310,6 +1360,306 @@ def torres_reforma_hd(g, rnd, track, i0, i1, count, zones, occ, lights):
         placed += 1
 
 
+# ---------------------------------------------------------------- San Luis Potosi: Feria de la Enchilada
+CANTERA = rgb(196, 140, 122)                 # cantera rosa potosina
+
+
+def fit_spot(track, hint, clear, zones=None, search=320.0, step=12.0):
+    """El punto mas cercano a 'hint' que quede a por lo menos 'clear' metros de la pista (y fuera de zonas)."""
+    h = v2(hint)
+    xs = np.arange(-search, search + 0.1, step)
+    G = np.array([(h[0] + a, h[1] + b) for a in xs for b in xs])
+    ok = track.nearest_dist(G) >= clear
+    if zones is not None:
+        ok &= ~zones.hit(G)
+    if not ok.any():
+        return beside_track(track, hint, clear)
+    cand = G[ok]
+    return cand[int(np.argmin(np.hypot(cand[:, 0] - h[0], cand[:, 1] - h[1])))]
+
+
+def rueda_geo(R):
+    """Rueda de la fortuna (gira alrededor del eje z local; el centro esta en el origen)."""
+    g = Geo()
+    steel, white = rgb(230, 232, 238), rgb(250, 250, 250)
+    sm = mat(M_METAL, 0.35, 0.6)
+    a = np.linspace(0, TAU, 33)
+    for z in (-1.6, 1.6):
+        for k in range(32):
+            cylinder(g, (R * math.cos(a[k]), R * math.sin(a[k]), z), (R * math.cos(a[k + 1]), R * math.sin(a[k + 1]), z),
+                     0.22, steel, sm, seg=6, caps=False)
+        for k in range(16):
+            cylinder(g, (0, 0, z), (R * math.cos(a[2 * k]), R * math.sin(a[2 * k]), z), 0.1, white, sm, seg=5,
+                     caps=False)
+    cylinder(g, (0, 0, -2.2), (0, 0, 2.2), 0.8, rgb(90, 95, 105), sm, seg=12)
+    cols = [(1.0, 0.25, 0.2), (1.0, 0.85, 0.2), (0.3, 0.6, 1.0), (0.3, 1.0, 0.4), (1.0, 0.3, 0.9)]
+    for k in range(64):                                                         # foquitos del aro
+        q = (R + 0.3) * math.cos(k / 64 * TAU), (R + 0.3) * math.sin(k / 64 * TAU)
+        for z in (-1.75, 1.75):
+            box(g, q[0] - 0.18, q[1] - 0.18, z - 0.12, q[0] + 0.18, q[1] + 0.18, z + 0.12, cols[k % 5],
+                mat(M_LAMP, 0.4, 0, 9.0))
+    return g
+
+
+def gondola_geo():
+    """Canastilla de la rueda (cuelga del punto de giro, siempre derecha)."""
+    g = Geo()
+    fbox(g, (0, 0), (1, 0), 1.3, 1.1, -3.0, -1.0, rgb(220, 40, 50), mat(M_PAINT, 0.35), bottom=True)
+    fbox(g, (0, 0), (1, 0), 1.45, 1.25, -1.0, -0.8, rgb(250, 210, 40), mat(M_PAINT, 0.35), bottom=True)
+    cylinder(g, (0, -0.8, 0), (0, 0, 0), 0.08, rgb(200, 200, 205), mat(M_METAL, 0.4, 0.8), seg=5, caps=False)
+    box(g, -0.2, -1.15, -0.2, 0.2, -0.95, 0.2, (1.0, 0.9, 0.6), mat(M_LAMP, 0.4, 0, 6.0))
+    return g
+
+
+def carrusel_geo():
+    """Carrusel (gira alrededor de y)."""
+    g = Geo()
+    fcyl(g, 0, 0, 0, 0.8, 9.5, rgb(200, 40, 60), mat(M_PAINT, 0.4), seg=24)
+    fcyl(g, 0, 0, 0.8, 7.5, 1.2, rgb(240, 200, 60), mat(M_METAL, 0.3, 0.8), seg=12, cap=False)
+    revolve(g, [(10.0, 6.8), (9.6, 7.4), (6.0, 8.6), (1.0, 10.2), (0.1, 10.5)], (0, 0, 0), (0, 1, 0),
+            rgb(250, 250, 250), mat(M_DEF, 0.6), seg=16)
+    cols = [rgb(250, 250, 250), rgb(40, 40, 45), rgb(150, 90, 50), rgb(240, 200, 60)]
+    for k in range(16):
+        a = k / 16 * TAU
+        for rr in (5.0, 7.8):
+            x, z = rr * math.cos(a + rr), rr * math.sin(a + rr)
+            fcyl(g, x, z, 0.8, 7.0, 0.06, rgb(240, 200, 60), mat(M_METAL, 0.3, 1.0), seg=5, cap=False)
+            y = 2.2 + 0.4 * math.sin(k * 1.7 + rr)
+            fbox(g, (x, z), (-math.sin(a), math.cos(a)), 0.9, 0.22, y, y + 0.7, cols[k % 4], mat(M_PAINT, 0.4),
+                 bottom=True)
+            fbox(g, (x + 0.7 * -math.sin(a), z + 0.7 * math.cos(a)), (-math.sin(a), math.cos(a)), 0.2, 0.15, y + 0.5,
+                 y + 1.3, cols[k % 4], mat(M_PAINT, 0.4), bottom=True)
+        q = (9.8 * math.cos(a), 9.8 * math.sin(a))
+        box(g, q[0] - 0.2, 6.9, q[1] - 0.2, q[0] + 0.2, 7.3, q[1] + 0.2, (1.0, 0.85, 0.5), mat(M_LAMP, 0.4, 0, 8.0))
+    return g
+
+
+def foquitos_hd(g, pa, pb, h, rnd, sag=1.2):
+    """Serie de foquitos de colores colgando entre dos postes."""
+    cols = [(1.0, 0.85, 0.5), (1.0, 0.3, 0.25), (0.3, 1.0, 0.4), (0.35, 0.55, 1.0), (1.0, 0.9, 0.2)]
+    ln = math.hypot(pb[0] - pa[0], pb[1] - pa[1])
+    for k in range(int(ln / 1.4)):
+        t = (k + 0.5) / int(ln / 1.4)
+        x, z = pa[0] + (pb[0] - pa[0]) * t, pa[1] + (pb[1] - pa[1]) * t
+        y = h - sag * 4 * t * (1 - t)
+        fbox(g, (x, z), (1, 0), 0.13, 0.13, y - 0.2, y, cols[k % 5], mat(M_LAMP, 0.4, 0, 8.0), bottom=True)
+
+
+def feria_hd(g, gc, crowd, rnd, track, sc, r0, md, info, lights):
+    """Feria de la Enchilada: escenario (noche), rueda de la fortuna, carrusel, puestos, foquitos y castillo."""
+    R = r0 + 62
+    ang = np.linspace(0, TAU, 65)
+    for j in range(64):
+        quad(g, (sc[0], 0.03, sc[1]), (sc[0], 0.03, sc[1]),
+             (sc[0] + R * math.cos(ang[j + 1]), 0.03, sc[1] + R * math.sin(ang[j + 1])),
+             (sc[0] + R * math.cos(ang[j]), 0.03, sc[1] + R * math.sin(ang[j])), rgb(168, 150, 124), mat(M_CONC, 0.9))
+    i_n = int(np.argmin(np.hypot(track.pts[:, 0] - sc[0], track.pts[:, 1] - sc[1])))
+    tt = track.pts[i_n] - sc
+    tt = tt / np.linalg.norm(tt)
+    base_a = math.atan2(tt[1], tt[0])
+    fe = sc + tt * (R - 2)                                                     # arco de entrada
+    rr = np.array([-tt[1], tt[0]])
+    for sgn in (-1, 1):
+        q = fe + rr * sgn * 15
+        fbox(g, q, tt, 1.2, 1.2, 0, 14, rgb(200, 40, 60), mat(M_PAINT, 0.4))
+    fbox(g, fe, rr, 16.5, 1.0, 12, 18, rgb(250, 200, 40), mat(M_PAINT, 0.4), bottom=True)
+    sign_quad(g, fe + tt * 1.05, tt, 14, 12.4, 17.6, 2)
+    sign_quad(g, fe - tt * 1.05, -tt, 14, 12.4, 17.6, 2)
+    spinners = []
+    # rueda de la fortuna y carrusel
+    a1 = base_a + 2.2
+    wc = sc + np.array([math.cos(a1), math.sin(a1)]) * (r0 + 30)
+    Rw, Hw = 20.0, 23.0
+    yaw = a1 + math.pi / 2
+    fx, fz = math.cos(yaw), math.sin(yaw)
+    for zs in (-3.2, 3.2):                                                     # patas en A
+        px, pz = wc[0] - fz * zs, wc[1] + fx * zs
+        for sgn in (-1, 1):
+            cylinder(g, (px + fx * sgn * 9, 0, pz + fz * sgn * 9), (px, Hw, pz), 0.45, rgb(230, 232, 238),
+                     mat(M_METAL, 0.35, 0.6), seg=8)
+    spinners.append(dict(kind="rueda", c=(float(wc[0]), Hw, float(wc[1])), yaw=yaw, R=Rw, w=0.12))
+    lights.append((float(wc[0]), Hw, float(wc[1]), 55.0, 1.0, 0.6, 0.8, 4.0))
+    a2 = base_a - 2.0
+    cc = sc + np.array([math.cos(a2), math.sin(a2)]) * (r0 + 26)
+    spinners.append(dict(kind="carrusel", c=(float(cc[0]), 0.0, float(cc[1])), yaw=0.0, R=10.0, w=0.5))
+    lights.append((float(cc[0]), 7.0, float(cc[1]), 35.0, 1.0, 0.85, 0.5, 3.5))
+    # castillo pirotecnico
+    a3 = base_a + math.pi
+    kc = sc + np.array([math.cos(a3), math.sin(a3)]) * (r0 + 40)
+    fcyl(g, kc[0], kc[1], 0, 24, 0.35, rgb(110, 80, 50), mat(M_DEF, 0.8), seg=6)
+    for k in range(5):
+        y = 5 + k * 4.2
+        fbox(g, kc, (1, 0), 3.5 - k * 0.5, 0.15, y, y + 0.25, rgb(110, 80, 50), mat(M_DEF, 0.8), bottom=True)
+        fbox(g, kc, (0, 1), 3.5 - k * 0.5, 0.15, y, y + 0.25, rgb(110, 80, 50), mat(M_DEF, 0.8), bottom=True)
+    castillo_pts = [(float(kc[0] + dx), 6 + k * 4.2, float(kc[1] + dz)) for k in range(5)
+                    for dx, dz in ((3.2 - k * 0.5, 0), (-3.2 + k * 0.5, 0))]
+    # puestos de enchiladas en anillos + foquitos
+    for ring, cnt in ((r0 + 10, 30), (r0 + 50, 44)):
+        for k in range(cnt):
+            a = k / cnt * TAU + rnd.uniform(-0.02, 0.02)
+            if abs(((a - base_a + math.pi) % TAU) - math.pi) < 0.16:             # pasillo de la entrada
+                continue
+            q = sc + np.array([math.cos(a), math.sin(a)]) * ring
+            if np.hypot(*(q - wc)) < 26 or np.hypot(*(q - cc)) < 14 or np.hypot(*(q - kc)) < 8:
+                continue
+            puesto_hd(g, q, (-math.sin(a), math.cos(a)), rnd)
+    for k in range(18):                                                        # postes y foquitos radiales
+        a = k / 18 * TAU
+        p0 = sc + np.array([math.cos(a), math.sin(a)]) * (r0 + 4)
+        p1 = sc + np.array([math.cos(a), math.sin(a)]) * (R - 6)
+        for q in (p0, p1):
+            fcyl(g, q[0], q[1], 0, 8, 0.12, rgb(90, 90, 95), mat(M_METAL, 0.4, 0.7), seg=6)
+        foquitos_hd(g, p0, p1, 7.8, rnd)
+        q2 = sc + np.array([math.cos(a + TAU / 18), math.sin(a + TAU / 18)]) * (R - 6)
+        foquitos_hd(g, p1, q2, 7.8, rnd, sag=0.8)
+        if k % 3 == 0:
+            lights.append((float(p1[0]), 6.0, float(p1[1]), 30.0, 1.0, 0.7, 0.4, 2.5))
+    # gente de la feria (dia y noche) + baile (noche)
+    for _ in range(1600):
+        a, rr_ = rnd.uniform(0, TAU), rnd.uniform(r0 + 3, R - 3)
+        x, z = sc[0] + rr_ * math.cos(a), sc[1] + rr_ * math.sin(a)
+        if np.hypot(x - wc[0], z - wc[1]) < 12 or np.hypot(x - cc[0], z - cc[1]) < 10.5:
+            continue
+        crowd.add(x, 0.0, z, rnd.uniform(-1, 1), rnd.uniform(-1, 1), rnd)
+    if md.concert:
+        build_concert_hd(gc, crowd, rnd, track, sc, r0, r0 + 4, 9.0, info)
+        info["fountain"] = list(info.get("fountain", [])) + castillo_pts
+        info["launch"] = list(info.get("launch", [])) + [(float(kc[0]), 25.0, float(kc[1]))] * 4
+    info["stadium"] = (sc, R, r0)
+    info["spinners"] = spinners
+
+
+def puente_vehicular_hd(g, track, i, lights, occ, rnd):
+    """Puente vehicular potosino sobre la pista: losa, VIGAS a la vista, cabezales, columnas y rampas."""
+    p, t, nr = track.pts[i], track.tan[i], track.nrm[i]
+    conc, conc2 = rgb(178, 176, 170), rgb(150, 148, 142)
+    mc = mat(M_CONC, 0.8)
+    W = 7.5                                                                    # medio ancho del puente (a lo largo de la pista)
+    span = LIMIT + 3.0
+    ramp = {}
+    for sgn in (-1, 1):                                                        # largo de las rampas segun el espacio
+        ln = 70.0
+        while ln > 20 and track.nearest_dist(np.array([p + nr * sgn * (span + ln)]))[0] < LIMIT + 4:
+            ln -= 10
+        ramp[sgn] = ln
+    fbox(g, p, nr, span, W, 7.0, 7.7, conc, mc, bottom=True)                   # losa
+    for sgn in (-1, 1):                                                        # parapetos y letreros
+        q = p + t * sgn * (W - 0.2)
+        fbox(g, q, nr, span, 0.25, 7.7, 8.7, conc2, mc)
+        face_quad(g, p + t * sgn * (W + 0.02) - nr * span, p + t * sgn * (W + 0.02) + nr * span, 6.95, 7.75,
+                  rgb(40, 110, 60), mat(M_CONC, 0.7), t * sgn)
+        sign_quad(g, p + t * sgn * (W + 0.05), t * sgn, 9.5, 6.95, 7.75, [1, 9, 2, 13][(i // 7 + sgn) % 4])
+    for k in range(6):                                                         # vigas (trabes AASHTO)
+        tz = -W + 1.0 + k * (2 * W - 2.0) / 5
+        c = p + t * tz
+        fbox(g, c, nr, span + 1.5, 0.18, 5.75, 7.0, conc2, mc, bottom=True)
+        fbox(g, c, nr, span + 1.5, 0.45, 5.55, 5.8, conc2, mc, bottom=True)
+        fbox(g, c, nr, span + 1.5, 0.35, 6.85, 7.0, conc2, mc, bottom=True)
+    for sgn in (-1, 1):                                                        # cabezal + columnas
+        q = p + nr * sgn * (LIMIT + 1.6)
+        fbox(g, q, t, W + 0.5, 1.0, 4.4, 5.55, conc, mc, bottom=True)
+        for tz in (-W + 1.5, 0.0, W - 1.5):
+            c = q + t * tz
+            fcyl(g, c[0], c[1], 0, 4.4, 0.65, conc, mc, seg=12, cap=False)
+        # rampa (terraplen con muros)
+        ln = ramp[sgn]
+        a0, a1 = p + nr * sgn * span, p + nr * sgn * (span + ln)
+        P = [(a0 - t * W), (a0 + t * W), (a1 + t * W), (a1 - t * W)]
+        quad_dir(g, (P[0][0], 7.7, P[0][1]), (P[1][0], 7.7, P[1][1]), (P[2][0], 0.1, P[2][1]),
+                 (P[3][0], 0.1, P[3][1]), rgb(70, 70, 74), mat(M_CONC, 0.75), (0, 1, 0))
+        for side in (-1, 1):
+            b0, b1 = a0 + t * side * W, a1 + t * side * W
+            quad_dir(g, (b0[0], 0, b0[1]), (b1[0], 0, b1[1]), (b1[0], 0.1, b1[1]), (b0[0], 7.7, b0[1]), conc2,
+                     mat(M_CONC, 0.85), (t[0] * side, 0, t[1] * side))
+        q = p + nr * sgn * (span + ln * 0.35)
+        lights.append((float(q[0]), 9.0, float(q[1]), 30.0, 1.0, 0.75, 0.45, 2.5))
+        occ.rect(p + nr * sgn * (span + ln / 2), nr, ln / 2 + 2, W + 2)
+    for sgn in (-0.5, 0.5):                                                    # postes sobre el puente
+        q = p + nr * sgn * span
+        for s2 in (-1, 1):
+            c = q + t * s2 * (W - 0.4)
+            fcyl(g, c[0], c[1], 7.7, 15.0, 0.12, rgb(85, 92, 98), mat(M_METAL, 0.45, 0.8), seg=6)
+            box(g, c[0] - 0.5, 14.8, c[1] - 0.5, c[0] + 0.5, 15.0, c[1] + 0.5, (1.0, 0.78, 0.45), mat(M_LAMP, 0.5, 0, 7.0))
+    lights.append((float(p[0]), 13.0, float(p[1]), 35.0, 1.0, 0.78, 0.45, 3.0))
+
+
+def jardin_hd(g, crowd, rnd, c, r, f, lights):
+    """Jardin Hidalgo de Soledad: plaza, kiosco, jacarandas y la parroquia."""
+    ang = np.linspace(0, TAU, 49)
+    for j in range(48):
+        quad(g, (c[0], 0.05, c[1]), (c[0], 0.05, c[1]), (c[0] + r * math.cos(ang[j + 1]), 0.05, c[1] + r * math.sin(ang[j + 1])),
+             (c[0] + r * math.cos(ang[j]), 0.05, c[1] + r * math.sin(ang[j])), rgb(190, 170, 150), mat(M_CONC, 0.8))
+    fcyl(g, c[0], c[1], 0, 1.3, 7.0, CANTERA, mat(M_CONC, 0.7), seg=8)          # kiosco
+    for k in range(8):
+        a = k / 8 * TAU
+        fcyl(g, c[0] + 6.3 * math.cos(a), c[1] + 6.3 * math.sin(a), 1.3, 6.5, 0.22, rgb(240, 240, 235),
+             mat(M_METAL, 0.4, 0.4), seg=6, cap=False)
+    revolve(g, [(7.6, 6.5), (6.0, 7.6), (3.0, 9.0), (0.6, 10.4), (0.05, 10.7)], (c[0], 0, c[1]), (0, 1, 0),
+            rgb(60, 120, 90), mat(M_METAL, 0.45, 0.6), seg=8)
+    for k in range(16):
+        a = k / 16 * TAU
+        box(g, c[0] + 7.2 * math.cos(a) - 0.15, 6.2, c[1] + 7.2 * math.sin(a) - 0.15, c[0] + 7.2 * math.cos(a) + 0.15,
+            6.5, c[1] + 7.2 * math.sin(a) + 0.15, (1.0, 0.85, 0.55), mat(M_LAMP, 0.4, 0, 8.0))
+    lights.append((float(c[0]), 6.0, float(c[1]), 30.0, 1.0, 0.85, 0.55, 3.0))
+    for k in range(12):
+        a = k / 12 * TAU + 0.2
+        jacaranda_hd(g, c[0] + r * 0.62 * math.cos(a), c[1] + r * 0.62 * math.sin(a), rnd.uniform(0.9, 1.2), rnd)
+    pc = c - v2(f) * (r - 14)                                                  # parroquia
+    fv = v2(f)
+    fbox(g, pc, fv, 9, 16, 0, 16, CANTERA, mat(M_CONC, 0.75))
+    for sgn in (-1, 1):
+        q = pc + fv * 8 + np.array([-fv[1], fv[0]]) * sgn * 13
+        fbox(g, q, fv, 3.5, 3.5, 0, 30, CANTERA, mat(M_CONC, 0.75))
+        sphere(g, (q[0], 31.5, q[1]), 2.4, rgb(230, 190, 80), mat(M_METAL, 0.4, 0.5), seg=10, rings=6)
+    revolve(g, [(6.5, 16), (6.0, 20), (4.0, 23), (0.4, 24.5)], (pc[0], 0, pc[1]), (0, 1, 0), rgb(230, 190, 80),
+            mat(M_METAL, 0.4, 0.5), seg=16)
+    for _ in range(350):
+        a, rr = rnd.uniform(0, TAU), rnd.uniform(9, r - 3)
+        x, z = c[0] + rr * math.cos(a), c[1] + rr * math.sin(a)
+        crowd.add(x, 0.05, z, rnd.uniform(-1, 1), rnd.uniform(-1, 1), rnd)
+
+
+def catedral_hd(g, c, f, lights):
+    """Catedral potosina de cantera rosa con su plaza de armas."""
+    fv = v2(f)
+    rv = np.array([-fv[1], fv[0]])
+    flat_rect(g, c + fv * 30, fv, 30, 40, 0.05, rgb(185, 165, 145), mat(M_CONC, 0.8))
+    fbox(g, c - fv * 12, fv, 32, 15, 0, 22, CANTERA, mat(M_CONC, 0.75))
+    for sgn in (-1, 1):
+        q = c + fv * 16 + rv * sgn * 13
+        fbox(g, q, fv, 5, 5, 0, 34, CANTERA, mat(M_CONC, 0.75))
+        fbox(g, q, fv, 3.6, 3.6, 34, 42, CANTERA, mat(M_CONC, 0.75))
+        revolve(g, [(3.6, 42), (3.0, 45), (1.2, 47.5), (0.2, 48.2)], (q[0], 0, q[1]), (0, 1, 0), rgb(230, 190, 80),
+                mat(M_METAL, 0.4, 0.5), seg=12)
+    q = c - fv * 18
+    revolve(g, [(8, 22), (7.5, 27), (5, 31), (0.5, 33.5)], (q[0], 0, q[1]), (0, 1, 0), rgb(230, 190, 80),
+            mat(M_METAL, 0.4, 0.5), seg=16)
+    for k in range(3):
+        q = c + fv * (35 + k * 10)
+        lights.append((float(q[0]), 10.0, float(q[1]), 45.0, 1.0, 0.8, 0.55, 3.0))
+
+
+def caja_agua_hd(g, c, lights):
+    """Caja del Agua (fuente neoclasica de cantera)."""
+    fcyl(g, c[0], c[1], 0, 1.5, 6.0, CANTERA, mat(M_CONC, 0.75), seg=8)
+    fcyl(g, c[0], c[1], 1.5, 8.5, 3.6, CANTERA, mat(M_CONC, 0.75), seg=8, cap=False)
+    fcyl(g, c[0], c[1], 8.5, 9.4, 4.3, rgb(180, 128, 110), mat(M_CONC, 0.75), seg=8)
+    revolve(g, [(3.6, 9.4), (3.0, 11.5), (1.5, 13), (0.2, 13.6)], (c[0], 0, c[1]), (0, 1, 0), CANTERA,
+            mat(M_CONC, 0.75), seg=8)
+    lights.append((float(c[0]), 5.0, float(c[1]), 25.0, 1.0, 0.8, 0.55, 2.5))
+
+
+def edificio_hd(g, c, f, hl, hw, h, col, k_sign, lights):
+    """Edificio institucional con su letrero hacia la pista y estacionamiento."""
+    fv = v2(f)
+    fbox(g, c, fv, hl, hw, 0, h, col, mat(M_WINDOWS, 0.4, 0.1))
+    fbox(g, c, fv, hl + 0.3, hw + 0.3, h, h + 1.2, rgb(235, 235, 238), mat(M_CONC, 0.7))
+    rv = np.array([-fv[1], fv[0]])
+    sign_quad(g, c + rv * (hw + 0.1), rv, min(hl - 2, 16), h - 5, h - 0.5, k_sign)
+    sign_quad(g, c - rv * (hw + 0.1), -rv, min(hl - 2, 16), h - 5, h - 0.5, k_sign)
+    lights.append((float(c[0] + rv[0] * (hw + 6)), 6.0, float(c[1] + rv[1] * (hw + 6)), 35.0, 0.9, 0.95, 1.0, 2.5))
+
+
 def build_world_streets(track, md):
     """Circuito callejero CDMX: calles, banquetas, edificios, puentes peatonales, semaforos y mucho publico."""
     rnd = random.Random(sum(map(ord, md.key)) * 104729)
@@ -1331,6 +1681,25 @@ def build_world_streets(track, md):
                                                           abs(i - i_h)))
     avoid = [(0, 30)] + [(i, 28) for i in over.values()] + [(a, 30) for a, b, _ in track.cross_pts] + \
         [(b, 30) for a, b, _ in track.cross_pts]
+    vehic = []
+    for lm in md.landmarks:
+        if lm[0] == "vehiculares":                     # puentes vehiculares sobre un tramo (p. ej. la carretera 57)
+            ia, ib = (int(np.argmin(np.hypot(*(pts - md.w(q)).T))) for q in (lm[1], lm[2]))
+            spanl = (ib - ia) % n
+            for k in range(lm[3]):
+                target = (ia + int((k + 0.5) / lm[3] * spanl)) % n
+                for dl in sorted(range(-40, 41), key=abs):
+                    i = (target + dl) % n
+                    if any(min(abs(i - a), n - abs(i - a)) < gp for a, gp in avoid + [(j, 60) for j in vehic]):
+                        continue
+                    if np.max(np.abs(track.curv[[(i + q) % n for q in range(-6, 7)]])) > 1 / 300:
+                        continue
+                    sides = np.array([pts[i] + nrm[i] * sg * (LIMIT + 8) for sg in (-1, 1)])
+                    if track.nearest_dist(sides).min() < LIMIT + 6:
+                        continue
+                    vehic.append(i)
+                    break
+    avoid += [(i, 25) for i in vehic]
     G = 6500
     xs = np.linspace(cxm - G, cxm + G, 41)
     zs = np.linspace(czm - G, czm + G, 41)
@@ -1343,6 +1712,7 @@ def build_world_streets(track, md):
     reserved = [(pts[i][0], pts[i][1], LIMIT + 22) for i in bridges] + [(pts[i][0], pts[i][1], LIMIT + 12)
                                                                          for i in cross]
     reserved += [(pts[i][0], pts[i][1], LIMIT + 34) for i in over.values()]
+    reserved += [(pts[i][0], pts[i][1], LIMIT + 14) for i in vehic]
     reserved += [(c[0], c[1], LIMIT + 30) for _, _, c in track.cross_pts]
     res = np.array(reserved, float).reshape(-1, 3)
 
@@ -1365,6 +1735,9 @@ def build_world_streets(track, md):
         hd.light_tower, hd.billboard_hd = o_tower, o_bb
     lift_crossings(gt, track)
     g.merge(gt)
+    for i in vehic:
+        puente_vehicular_hd(g, track, i, lights, occ, rnd)
+    info["vehic"] = list(vehic)
     if "monumento" in over:
         monumento_rev_hd(g, track, over["monumento"], lights)
         i = over["monumento"]
@@ -1392,7 +1765,14 @@ def build_world_streets(track, md):
             occ.rect(occ_pts[k], tan[k], 3.5, 3.6)
     # ---- estadio del concierto (al lado de la pista)
     keep_info = None
-    if md.venue and md.venue.get("kind") == "fanfest":
+    if md.venue and md.venue.get("kind") == "feria":
+        v = md.venue
+        r0 = float(v.get("r0", 38))
+        sc = fit_spot(track, md.w(v["pos"]), r0 + 62 + LIMIT + 6)
+        feria_hd(g, gc, crowd, rnd, track, sc, r0, md, info, lights)
+        zones.circle(sc, r0 + 64)
+        keep_info = (sc, r0 + 62)
+    elif md.venue and md.venue.get("kind") == "fanfest":
         v = md.venue
         r0 = float(v.get("r0", 55))
         sc = beside_track(track, md.w(v["pos"]), r0 + 8 + LIMIT + 10)
@@ -1455,8 +1835,58 @@ def build_world_streets(track, md):
     for lm in md.landmarks:
         kind = lm[0]
         pos = md.w(lm[1]) if kind not in ("torres", "parque") else None
-        if kind == "monumento":
-            continue                                                           # ya se construyo sobre la pista
+        if kind in ("monumento", "vehiculares"):
+            continue                                                           # ya se construyeron sobre la pista
+        if kind == "jardin":
+            r = lm[2] if len(lm) > 2 else 45.0
+            c = fit_spot(track, pos, r + LIMIT + 4, zones)
+            i_n = int(np.argmin(np.hypot(*(pts - c).T)))
+            f = pts[i_n] - c
+            jardin_hd(g, crowd, rnd, c, r, f / np.linalg.norm(f), lights)
+            zones.circle(c, r + 2)
+            continue
+        if kind == "catedral":
+            c = fit_spot(track, pos, 55 + LIMIT, zones)
+            i_n = int(np.argmin(np.hypot(*(pts - c).T)))
+            f = pts[i_n] - c
+            catedral_hd(g, c, f / np.linalg.norm(f), lights)
+            info["catedral"] = c
+            zones.circle(c, 55)
+            continue
+        if kind == "caja_agua":
+            c = fit_spot(track, pos, LIMIT + 14, zones)
+            caja_agua_hd(g, c, lights)
+            zones.circle(c, 10)
+            noveg.circle(c, 12)
+            continue
+        if kind == "edificio":                                                 # ("edificio", pos, letrero, color)
+            hl, hw, h = 45.0, 18.0, 24.0
+            c = fit_spot(track, pos, hl + LIMIT + 8, zones)
+            i_n = int(np.argmin(np.hypot(*(pts - c).T)))
+            edificio_hd(g, c, tan[i_n], hl, hw, h, lm[3], lm[2], lights)
+            flat_rect(g, c, tan[i_n], hl + 14, hw + 22, 0.04, rgb(80, 80, 84), mat(M_CONC, 0.8))
+            zones.rect(c, tan[i_n], hl + 14, hw + 22)
+            noveg.rect(c, tan[i_n], hl + 16, hw + 24)
+            continue
+        if kind == "rio":                                                      # canal junto a la pista
+            ia, ib = (int(np.argmin(np.hypot(*(pts - md.w(q)).T))) for q in (lm[1], lm[2]))
+            side = lm[3]
+            idx = np.array([(ia + k) % n for k in range((ib - ia) % n + 1)])
+            ok = track.nearest_dist(pts[idx] + nrm[idx] * side * (LIMIT + 28)) > LIMIT + 22
+            for r_ in hd.runs(ok[:-1]) if not ok.all() else [np.arange(len(idx))]:
+                r_ = idx[r_[r_ < len(idx)]]
+                if len(r_) < 3:
+                    continue
+                P = hd.offset_grid(track, r_, [LIMIT + 15, LIMIT + 19, LIMIT + 37, LIMIT + 41], [0.6, 0.02, 0.02, 0.6],
+                                   side)
+                grid(g, P[[0, 1]], rgb(160, 156, 148), mat(M_CONC, 0.85), orient=(0, 1, 0))
+                grid(g, P[[2, 3]], rgb(160, 156, 148), mat(M_CONC, 0.85), orient=(0, 1, 0))
+                grid(g, P[[1, 2]], rgb(40, 100, 125), mat(M_DEF, 0.1, 0.0), orient=(0, 1, 0))
+                for k in r_[::6]:
+                    q = pts[k] + nrm[k] * side * (LIMIT + 28)
+                    openz.circle(q, 22)
+                    noveg.circle(q, 20)
+            continue
         if kind == "angel":                                                    # glorieta con festejo
             c = beside_track(track, pos, LIMIT + 22)
             for j in range(48):
@@ -1497,7 +1927,8 @@ def build_world_streets(track, md):
             balon_hd(g, bq[0], 9.0, bq[1], 9.0)                               # balon gigante en la salida
             occ.rect(bq, (1, 0), 10, 10)
         elif kind == "lago":
-            c, half = v2(pos), lm[2]
+            half = lm[2]
+            c = fit_spot(track, pos, math.hypot(*half) + LIMIT + 4)
             flat_rect(g, c, (1, 0), half[0], half[1], 0.06, rgb(32, 58, 78), mat(M_DEF, 0.05, 0.3))
             for k in range(8):                                                 # lanchas de pedales
                 q = c + np.array([rnd.uniform(-half[0] * 0.8, half[0] * 0.8), rnd.uniform(-half[1] * 0.7, half[1] * 0.7)])
@@ -1785,6 +2216,1167 @@ def build_world_streets(track, md):
     return g, gc, crowd, lights, info
 
 
+# ================================================================ circuitos REALES (OpenStreetMap)
+# Calles, anchos, puentes, deprimidos, alturas y edificios reales (datos de mapas_osm/, ver gtc_mapas_osm.py).
+OSM_DIR = os.path.join(hd.HERE, "mapas_osm")
+_OSM_DATA = {}
+CORNER_SIGNS = [6, 6, 5, 15, 7, 4, 8, 13]       # OXXO (2x), SIMI, tacos, Bimbo, Bodega, gas, CDMX
+POI_SIGN = {"convenience": 6, "pharmacy": 5, "chemist": 5, "restaurant": 15, "fast_food": 15, "bakery": 7,
+            "supermarket": 4, "fuel": 8, "cafe": 15, "butcher": 15, "greengrocer": 4}
+SIDEWALK = {0: 0.0, 1: 4.5, 2: 4.0, 3: 3.6, 4: 3.0, 5: 2.6, 6: 2.3, 7: 2.0, 8: 1.8, 9: 2.3, 10: 1.5, 11: 1.5,
+            12: 1.5, 13: 1.5, 14: 1.5, 15: 1.5}
+
+
+def load_osm(key):
+    if key not in _OSM_DATA:
+        import gzip
+        import json
+        with gzip.open(os.path.join(OSM_DIR, key + ".json.gz"), "rt", encoding="utf-8") as f:
+            _OSM_DATA[key] = json.load(f)
+    return _OSM_DATA[key]
+
+
+class OSMTrack(MapTrack):
+    """Pista hecha con las calles reales: ancho, altura y paredes (fachadas, vallas, parapetos) por tramo."""
+
+    def __init__(self, md):
+        self.md = md
+        d = self.osm = load_osm(md.osm)
+        self.ctrl = np.array(d["pts"], float)
+        self._setup(self.ctrl.copy())
+        self.sand[:] = False
+        n = self.n
+        self.rw = np.array(d["rw"], float)
+        self.h = np.array(d["h"], float)
+        self.hg = np.array(d["hg"], float)
+        self.off = np.array(d["off"], float)
+        self.br = np.array(d["br"], bool)
+        self.tu = np.array(d["tu"], bool)
+        self.ow = np.array(d.get("ow", [0] * n), bool)
+        self.ln = np.array(d.get("ln", [2] * n), int)
+        self.cls = np.array(d["cls"], int)
+        self.name_idx = np.array(d["name"], int)
+        self.names = d["names"]
+        self.wpos = self.rw + 3.0                  # paredes de cada lado (las calcula el constructor del mundo)
+        self.wneg = self.rw + 3.0
+        # cruces de la ruta consigo misma: a nivel (se pintan) o a desnivel (puente sobre la otra calle)
+        cp = self.find_crossings()
+        self.cross_pts = cp
+        self.cross_flat = [(a, b, c) for a, b, c in cp if abs(self.h[a] - self.h[b]) < 3.0]
+
+    def h_at(self, u):
+        f = (u % self.L) / self.spacing
+        i = int(f) % self.n
+        t = f - int(f)
+        return float(self.h[i] * (1 - t) + self.h[(i + 1) % self.n] * t)
+
+    def slope_at(self, u):
+        i = int((u % self.L) / self.spacing) % self.n
+        return float((self.h[(i + 2) % self.n] - self.h[i - 2]) / (4 * self.spacing))
+
+    def project(self, x, z):
+        car = sys._getframe(1).f_locals.get("self")
+        i0 = getattr(car, "idx", None)
+        res = None
+        if isinstance(i0, (int, np.integer)):
+            w = (np.arange(-30, 90) + int(i0)) % self.n
+            px, pz = x - self.pts[w, 0], z - self.pts[w, 1]
+            d = self.d[w]
+            t = np.clip((px * d[:, 0] + pz * d[:, 1]) * self.inv_len2[w], 0, 1)
+            ex, ez = px - d[:, 0] * t, pz - d[:, 1] * t
+            e2 = ex * ex + ez * ez
+            k = int(np.argmin(e2))
+            if e2[k] < (3 * LIMIT) ** 2:
+                i = int(w[k])
+                nx, nz = self.nrm[i]
+                res = (float(self.cum[i] + t[k] * self.seg_len[i]), i, float(ex[k] * nx + ez[k] * nz),
+                       self.pts[i, 0] + d[k, 0] * t[k], self.pts[i, 1] + d[k, 1] * t[k], nx, nz)
+        if res is None:
+            res = base.Track.project(self, x, z)
+        s, i, lat, cx, cz, nx, nz = res
+        # paredes reales de este tramo -> la fisica del juego base usa LIMIT fijo: se traduce la distancia
+        sg = 1.0 if lat >= 0 else -1.0
+        w = float(self.wpos[i] if lat >= 0 else self.wneg[i])
+        u = abs(lat)
+        b1 = w - 3.2
+        a1 = min(self.rw[i] + 0.3, b1 - 0.2)
+        L0 = LIMIT
+        if u <= a1:
+            v = u * (HW + CURB_W) / a1
+        elif u <= b1:
+            v = (HW + CURB_W) + (u - a1) * (L0 - 3.2 - HW - CURB_W) / max(b1 - a1, 1e-3)
+        else:
+            v = u - (w - L0)
+        return s, i, sg * v, cx + nx * sg * (w - L0), cz + nz * sg * (w - L0), nx, nz
+
+
+class Terrain:
+    """Altura del suelo en cualquier punto (interpolada de la altura real a lo largo de la ruta)."""
+
+    def __init__(self, track):
+        k = max(1, track.n // 1400)
+        self.P = track.pts[::k].astype(np.float32)
+        self.H = track.hg[::k].astype(np.float32)
+
+    def __call__(self, Q):
+        Q = np.asarray(Q, np.float32).reshape(-1, 2)
+        out = np.empty(len(Q), np.float32)
+        for a in range(0, len(Q), 1024):
+            c = Q[a:a + 1024]
+            d2 = ((c[:, None, :] - self.P[None]) ** 2).sum(-1)
+            w = 1.0 / (d2 + 1600.0) ** 1.5
+            out[a:a + 1024] = (w * self.H).sum(1) / w.sum(1)
+        return out
+
+
+class OffsetCrowd:
+    """Publico de un monumento construido en y=0 que se sube a la altura del suelo."""
+
+    def __init__(self, crowd, dy):
+        self.crowd, self.dy = crowd, dy
+
+    def add(self, x, y, z, *a, **k):
+        self.crowd.add(x, y + self.dy, z, *a, **k)
+
+
+def lift_geo(geo, dy):
+    for p in geo.parts:
+        p[:, 1] += dy
+    return geo
+
+
+def placed(g, crowd, lights, dy, fn):
+    """Construye algo pensado para y=0 y lo coloca a la altura del suelo dy."""
+    tg, tl = Geo(), []
+    r = fn(tg, OffsetCrowd(crowd, dy), tl)
+    g.merge(lift_geo(tg, dy))
+    lights += [(l[0], l[1] + dy) + tuple(l[2:]) for l in tl]
+    return r
+
+
+def ear_clip(P):
+    """Triangulacion de un poligono simple (lista de indices de triangulos)."""
+    n = len(P)
+    if n < 3:
+        return []
+    area = 0.5 * sum(P[i][0] * P[(i + 1) % n][1] - P[(i + 1) % n][0] * P[i][1] for i in range(n))
+    idx = list(range(n)) if area > 0 else list(range(n))[::-1]
+    tris, guard = [], 0
+    while len(idx) > 3 and guard < 4 * n:
+        guard += 1
+        m = len(idx)
+        for k in range(m):
+            a, b, c = idx[k - 1], idx[k], idx[(k + 1) % m]
+            ax, az = P[a]
+            bx, bz = P[b]
+            cx, cz = P[c]
+            if (bx - ax) * (cz - az) - (bz - az) * (cx - ax) <= 1e-9:
+                continue
+            ok = True
+            for o in idx:
+                if o in (a, b, c):
+                    continue
+                px, pz = P[o]
+                d1 = (bx - ax) * (pz - az) - (bz - az) * (px - ax)
+                d2 = (cx - bx) * (pz - bz) - (cz - bz) * (px - bx)
+                d3 = (ax - cx) * (pz - cz) - (az - cz) * (px - cx)
+                if d1 > 0 and d2 > 0 and d3 > 0:
+                    ok = False
+                    break
+            if ok:
+                tris.append((a, b, c))
+                idx.pop(k)
+                break
+        else:
+            break
+    if len(idx) == 3:
+        tris.append(tuple(idx))
+    return tris
+
+
+def inside_poly(P, Q):
+    """Que puntos Q (m, 2) caen dentro del poligono P (k, 2)."""
+    P = np.asarray(P, float)
+    Q = np.asarray(Q, float)
+    x, z = Q[:, 0], Q[:, 1]
+    ins = np.zeros(len(Q), bool)
+    A, B = P, np.roll(P, -1, 0)
+    for (ax, az), (bx, bz) in zip(A, B):
+        c = (az > z) != (bz > z)
+        xi = ax + (z - az) * (bx - ax) / np.where(np.abs(bz - az) < 1e-12, 1e-12, bz - az)
+        ins ^= c & (x < xi)
+    return ins
+
+
+def route_grid(track, cell=12.0):
+    """Indice espacial de las muestras de la ruta."""
+    G = {}
+    for i, (x, z) in enumerate(track.pts):
+        G.setdefault((int(x // cell), int(z // cell)), []).append(i)
+    return G, cell
+
+
+def nearest_route(track, rg, Q, maxd=40.0):
+    """Para cada punto: (indice de la muestra mas cercana, distancia lateral con signo, distancia) o -1."""
+    G, cell = rg
+    Q = np.asarray(Q, float).reshape(-1, 2)
+    ii = np.full(len(Q), -1)
+    lat = np.zeros(len(Q))
+    dist = np.full(len(Q), 1e9)
+    r = int(math.ceil(maxd / cell))
+    cells = {}
+    for k, (x, z) in enumerate(Q):
+        cells.setdefault((int(x // cell), int(z // cell)), []).append(k)
+    for (cx, cz), ks in cells.items():
+        cand = []
+        for dx in range(-r, r + 1):
+            for dz in range(-r, r + 1):
+                cand += G.get((cx + dx, cz + dz), [])
+        if not cand:
+            continue
+        cand = np.array(cand)
+        q = Q[ks]
+        D = np.hypot(q[:, None, 0] - track.pts[cand][None, :, 0], q[:, None, 1] - track.pts[cand][None, :, 1])
+        j = np.argmin(D, axis=1)
+        best = cand[j]
+        ii[ks] = best
+        dist[ks] = D[np.arange(len(ks)), j]
+        e = q - track.pts[best]
+        lat[ks] = e[:, 0] * track.nrm[best, 0] + e[:, 1] * track.nrm[best, 1]
+    return ii, lat, dist
+
+
+def road_ribbon(g, track, idx, lats, ys, col, m, uv_scale=None, orient=(0, 1, 0)):
+    """Malla a lo largo de la ruta: lats/ys (C, len(idx)) en metros laterales y altura absoluta."""
+    lats = np.asarray(lats, float)
+    ys = np.broadcast_to(np.asarray(ys, float), lats.shape)
+    pts, nrm = track.pts[idx], track.nrm[idx]
+    k = track.curv[idx]
+    lim = np.where(np.abs(k) > 1e-4, 0.92 / np.maximum(np.abs(k), 1e-4), 1e9)
+    inner = np.sign(lats) == np.sign(k)[None, :]
+    lats = np.where(inner, np.clip(lats, -lim[None, :], lim[None, :]), lats)
+    P = np.zeros(lats.shape + (3,), F4)
+    P[..., 0] = pts[None, :, 0] + nrm[None, :, 0] * lats
+    P[..., 2] = pts[None, :, 1] + nrm[None, :, 1] * lats
+    P[..., 1] = ys
+    s = hd.s_unwrap(track, idx)
+    UV = np.stack(np.broadcast_arrays(s[None, :], lats if uv_scale is None else lats * uv_scale), -1).astype(F4)
+    grid(g, P, col, m, UV=UV, orient=orient)
+
+
+def ped_bridge_osm(g, crowd, rnd, track, i, ang, lights, y0, occ):
+    """Puente peatonal real sobre la ruta (a la altura del camino)."""
+    tg = Geo()
+    half = max(track.rw[i] + 5.0, 9.0)
+    ped_bridge_hd(tg, OffsetCrowd(crowd, y0), rnd, track, i, rnd.choice([11, 6, 8, 15, 4]), [], occ, half=half)
+    g.merge(lift_geo(tg, y0))
+    lights.append((float(track.pts[i][0]), y0 + 8.4, float(track.pts[i][1]), 30.0, 1.0, 0.88, 0.7, 3.0))
+
+
+def start_arch(g, track, info, lights):
+    """Arco de salida/meta del ancho de la calle, con el semaforo de arranque."""
+    p0, n0, t0 = track.pts[0], track.nrm[0], track.tan[0]
+    y = track.h[0]
+    half = track.rw[0] + 0.8
+    steel = rgb(40, 42, 48)
+    for side in (-1, 1):
+        c = p0 + n0 * side * half
+        fbox(g, c, t0, 0.5, 0.5, y, y + 8.4, steel, mat(M_METAL, 0.45, 0.8))
+    a = p0 - n0 * half
+    obox(g, (a[0] - t0[0] * 0.6, y + 6.6, a[1] - t0[1] * 0.6), (n0[0] * 2 * half, 0, n0[1] * 2 * half), (0, 1.8, 0),
+         (t0[0] * 1.2, 0, t0[1] * 1.2), steel, mat(M_METAL, 0.45, 0.8))
+    for sgn in (-1, 1):
+        sign_quad(g, p0 + t0 * 0.62 * sgn, -t0 * sgn, half - 0.4, y + 6.8, y + 8.2, 3)
+    for k in range(5):
+        off = (k - 2) * min(2.0, half * 0.35)
+        cx, cz = p0[0] - t0[0] * 0.63 + n0[0] * off, p0[1] - t0[1] * 0.63 + n0[1] * off
+        for row in range(2):
+            yy = y + 6.0 + row * 0.5
+            quad(g, (cx - n0[0] * 0.4, yy, cz - n0[1] * 0.4), (cx + n0[0] * 0.4, yy, cz + n0[1] * 0.4),
+                 (cx + n0[0] * 0.4, yy + 0.4, cz + n0[1] * 0.4), (cx - n0[0] * 0.4, yy + 0.4, cz - n0[1] * 0.4),
+                 (1, 1, 1), mat(hd.M_STARTL, 0.3), ((k, 0), (k, 0), (k, 1), (k, 1)))
+    a, b = p0 - n0 * track.rw[0], p0 + n0 * track.rw[0]
+    quad(g, (a[0], y + 0.08, a[1]), (b[0], y + 0.08, b[1]), (b[0] + t0[0] * 2.5, y + 0.08, b[1] + t0[1] * 2.5),
+         (a[0] + t0[0] * 2.5, y + 0.08, a[1] + t0[1] * 2.5), (1, 1, 1), mat(hd.M_CHECK, 0.5),
+         ((0, -track.rw[0]), (0, track.rw[0]), (2.5, track.rw[0]), (2.5, -track.rw[0])))
+    lights.append((float(p0[0]), y + 7.5, float(p0[1]), 30.0, 1.0, 0.95, 0.85, 3.0))
+    info["gantry"] = (float(p0[0]), float(p0[1]))
+
+
+def osm_building(g, P, base, top, col, rnd, route_facing=None, sign_k=None, crowd=None, floor=None):
+    """Edificio real a partir de su planta: muros con ventanas, azotea, tinacos y local hacia la ruta."""
+    P = np.asarray(P, float)
+    if len(P) > 3 and np.hypot(*(P[0] - P[-1])) < 0.05:
+        P = P[:-1]
+    n = len(P)
+    if n < 3:
+        return
+    cen = P.mean(0)
+    A, B = P, np.roll(P, -1, 0)
+    E = B - A
+    Ln = np.hypot(E[:, 0], E[:, 1])
+    ok = Ln > 0.05
+    A, B, E, Ln = A[ok], B[ok], E[ok], Ln[ok]
+    if len(A) < 3:
+        return
+    Nn = np.column_stack([E[:, 1], -E[:, 0]]) / Ln[:, None]
+    mid = (A + B) / 2
+    flip = ((mid - cen) * Nn).sum(1) < 0
+    Nn[flip] *= -1
+    k = len(A)
+    u0 = np.concatenate([[0], np.cumsum(Ln)[:-1]])
+    V = np.empty((k, 6, 3), F4)
+    UVs = np.empty((k, 6, 2), F4)
+    for j, (sa, sy) in enumerate(((0, 0), (1, 0), (1, 1), (0, 0), (1, 1), (0, 1))):
+        q = B if sa else A
+        V[:, j, 0], V[:, j, 2] = q[:, 0], q[:, 1]
+        V[:, j, 1] = top if sy else base
+        UVs[:, j, 0] = u0 + Ln * sa
+        UVs[:, j, 1] = (top - base) if sy else 0.0
+    NN = np.repeat(np.column_stack([Nn[:, 0], np.zeros(k), Nn[:, 1]])[:, None, :], 6, 1)
+    g.tris(V.reshape(-1, 3), NN.reshape(-1, 3), col, mat(M_WINDOWS, 0.55, 0.05), UVs.reshape(-1, 2))
+    tri = ear_clip([tuple(p) for p in A])
+    if tri:
+        T = np.array([[A[a], A[b], A[c]] for a, b, c in tri]).reshape(-1, 2)
+        g.tris(np.column_stack([T[:, 0], np.full(len(T), top), T[:, 1]]), (0.0, 1.0, 0.0),
+               tuple(v * 0.8 for v in col), mat(M_CONC, 0.85), T)
+    if top - base < 30 and rnd.random() < 0.6:                                   # tinacos
+        for _ in range(rnd.randint(1, 3)):
+            q = cen + (A[rnd.randrange(k)] - cen) * rnd.uniform(0.1, 0.6)
+            fcyl(g, q[0], q[1], top, top + 1.4, 0.62, rgb(22, 22, 24), mat(M_DEF, 0.6), seg=8)
+    if route_facing is not None:                                                # local hacia la ruta
+        j = route_facing
+        a, b, nv = A[j], B[j], Nn[j]
+        f = (b - a) / Ln[j]
+        w = Ln[j] / 2 - 0.6
+        F = (a + b) / 2 + nv * 0.06
+        gy = floor if floor is not None else base + 2.5
+        face_quad(g, F - f * w, F + f * w, gy + 0.25, gy + 2.8, (1.0, 0.84, 0.6), mat(M_LAMP, 0.5, 0, 2.2), nv)
+        a0, a1 = F - f * w, F + f * w
+        b0, b1 = a0 + nv * 1.5, a1 + nv * 1.5
+        quad_dir(g, (a0[0], gy + 3.15, a0[1]), (a1[0], gy + 3.15, a1[1]), (b1[0], gy + 2.6, b1[1]),
+                 (b0[0], gy + 2.6, b0[1]), rnd.choice(AWNINGS), mat(M_DEF, 0.75), (nv[0], 1.0, nv[1]))
+        if sign_k is not None:
+            sign_quad(g, F + nv * 0.05, nv, min(w, 4.5), gy + 3.3, gy + 4.2, sign_k)
+
+
+def build_world_osm(track, md):
+    """Ciudad real: la ruta con sus anchos y alturas, calles, edificios de OSM + manzanas, puentes y lugares."""
+    d = track.osm
+    rnd = random.Random(sum(map(ord, md.key)) * 7907)
+    g, gc, lights, info = Geo(), Geo(), [], {}
+    crowd = PaletteCrowd(MEXICO_SHIRTS if md.palette == "mexico" else md.palette) if md.palette else Crowd()
+    pts, nrm, tan, n = track.pts, track.nrm, track.tan, track.n
+    rw, h, off = track.rw, track.h, track.off
+    lm0 = {k: np.array(v[:2], float) for k, v in d.get("lm", {}).items()}
+    if md.datum in lm0 and not getattr(track, "_datum_done", False):     # el concierto queda en y = 0
+        dy = float(Terrain(track)([lm0[md.datum]])[0])
+        track.h -= dy
+        track.hg -= dy
+        track._datum_done = True
+    T = Terrain(track)
+    rg = route_grid(track)
+    occ, zones, openz = Occupancy(4.0), Zones(), Zones()
+    cxm, czm = track.center
+    lo, hi = pts.min(0) - 650, pts.max(0) + 650
+    # ---------------------------------------------------------------- suelo con alturas reales
+    cell = 40.0
+    gx = np.arange(lo[0], hi[0] + cell, cell)
+    gz = np.arange(lo[1], hi[1] + cell, cell)
+    GX, GZ = np.meshgrid(gx, gz, indexing="ij")
+    GQ = np.column_stack([GX.ravel(), GZ.ravel()])
+    GY = T(GQ) - 0.35
+    sunk = np.nonzero(off < -0.4)[0]
+    if len(sunk):                                                         # deprimidos: el suelo baja junto al camino
+        ii, lat_, dist_ = nearest_route(track, rg, GQ, 60)
+        m = (ii >= 0) & (dist_ < rw[np.maximum(ii, 0)] + cell * 1.1) & (off[np.maximum(ii, 0)] < -0.4)
+        GY[m] = np.minimum(GY[m], h[ii[m]] - 0.4)
+    gmin = float(GY.min())
+    grid(g, np.stack([GX, GY.reshape(GX.shape), GZ], -1), rgb(122, 118, 110), mat(M_CONC, 0.9), orient=(0, 1, 0))
+    G2 = 7000
+    for (x0, x1, z0, z1) in ((cxm - G2, lo[0], czm - G2, czm + G2), (hi[0], cxm + G2, czm - G2, czm + G2),
+                             (lo[0], hi[0], czm - G2, lo[1]), (lo[0], hi[0], hi[1], czm + G2)):
+        quad_dir(g, (x0, gmin - 0.5, z0), (x1, gmin - 0.5, z0), (x1, gmin - 0.5, z1), (x0, gmin - 0.5, z1),
+                 rgb(110, 108, 100), mat(M_CONC, 0.9), (0, 1, 0))
+    yG = lambda x, z: float(T([(x, z)])[0])
+    # ---------------------------------------------------------------- lugares reales (zonas reservadas)
+    lm = {k: np.array(v[:2], float) for k, v in d.get("lm", {}).items()}
+    build_osm_landmarks(g, gc, crowd, rnd, track, md, info, lights, lm, zones, openz, occ, T)
+    if "stage" not in info:
+        info.update({k: v for k, v in no_concert_info(track).items() if k not in info})
+    # ---------------------------------------------------------------- la ruta: asfalto, lineas y orillas
+    allidx = np.append(np.arange(n), 0)
+    yR = h[allidx] + 0.06
+    lat5 = np.outer([-1, -0.5, 0, 0.5, 1], rw[allidx])
+    road_ribbon(g, track, allidx, lat5, yR[None, :], rgb(58, 58, 62), mat(hd.M_ASPH, 0.7),
+                uv_scale=(7.0 / rw[allidx])[None, :])
+    two_way = ~track.ow
+    s_ = np.arange(n) * track.spacing
+    for sgn in (-1, 1):                                                   # doble linea amarilla al centro
+        m = two_way.copy()
+        for r in hd.runs(m):
+            road_ribbon(g, track, r, np.array([[sgn * 0.1] * len(r), [sgn * 0.24] * len(r)]),
+                        (h[r] + 0.078)[None, :], (0.95, 0.75, 0.1), mat(M_LINE, 0.55))
+    dash = (s_ % 9.0) < 4.5
+    for k in range(1, 6):                                                 # lineas de carril punteadas
+        lanes = track.ln
+        m = (lanes > k) & dash & ~((two_way) & (lanes == 2 * k))
+        for r in hd.runs(m):
+            lat = -rw[r] + 2 * rw[r] * k / lanes[r]
+            road_ribbon(g, track, r, np.array([lat - 0.07, lat + 0.07]), (h[r] + 0.078)[None, :], (0.92, 0.92, 0.92),
+                        mat(M_LINE, 0.55))
+    # ---------------------------------------------------------------- puentes, terraplenes y deprimidos de la ruta
+    elev = off > 0.4
+    sunkm = off < -0.4
+    conc, conc2 = rgb(176, 174, 168), rgb(150, 148, 142)
+    for side in (-1, 1):
+        for r in hd.runs(elev):
+            e = rw[r] + 0.6
+            road_ribbon(g, track, r, np.array([rw[r], rw[r], e, e]) * side,
+                        np.array([h[r] + 0.06, h[r] + 0.95, h[r] + 0.95, h[r] - 1.25]), conc, mat(M_CONC, 0.8))
+        for r in hd.runs(elev & ~track.br):                               # terraplen: muro hasta el suelo
+            e = rw[r] + 0.6
+            road_ribbon(g, track, r, np.array([e, e]) * side, np.array([h[r] - 1.2, T(pts[r]) - 0.6]), conc2,
+                        mat(M_CONC, 0.85))
+        for r in hd.runs(sunkm):                                          # deprimido: muros de contencion
+            e = rw[r] + 0.6
+            top = np.maximum(T(pts[r]) + 1.0, h[r] + 1.0)
+            road_ribbon(g, track, r, np.array([rw[r], e, e, e + 0.6]) * side,
+                        np.array([h[r] + 0.06, h[r] + 0.06, top, top]), conc2, mat(M_CONC, 0.85))
+    for r in hd.runs(elev & track.br):                                    # puente: losa y VIGAS a la vista
+        e = rw[r] + 0.6
+        road_ribbon(g, track, r, np.array([-e, e]), (h[r] - 1.25)[None, :], conc2, mat(M_CONC, 0.8),
+                    orient=(0, -1, 0))
+        nb = 5
+        for b in range(nb):
+            lc = -rw[r] * 0.85 + rw[r] * 1.7 * b / (nb - 1)
+            for side in (-1, 1):
+                road_ribbon(g, track, r, np.array([lc + side * 0.22, lc + side * 0.22]),
+                            np.array([h[r] - 1.25, h[r] - 2.45]), conc2, mat(M_CONC, 0.8))
+            road_ribbon(g, track, r, np.array([lc - 0.45, lc + 0.45]), (h[r] - 2.45)[None, :], conc2,
+                        mat(M_CONC, 0.8), orient=(0, -1, 0))
+        for k in r[::9]:                                                  # cabezales y columnas
+            y_top = h[k] - 2.45
+            yg = yG(*pts[k])
+            if y_top - yg < 1.5:
+                continue
+            fbox(g, pts[k], nrm[k], rw[k] + 0.8, 0.9, y_top - 1.1, y_top, conc, mat(M_CONC, 0.8), bottom=True)
+            for lc in (-rw[k] * 0.55, rw[k] * 0.55):
+                q = pts[k] + nrm[k] * lc
+                fcyl(g, q[0], q[1], yg - 1.0, y_top - 1.1, 0.75, conc, mat(M_CONC, 0.8), seg=12, cap=False)
+        for k in r[::12]:
+            for side in (-1, 1):
+                q = pts[k] + nrm[k] * side * (rw[k] + 0.45)
+                fcyl(g, q[0], q[1], h[k] + 0.95, h[k] + 9.0, 0.11, rgb(85, 92, 98), mat(M_METAL, 0.45, 0.8), seg=6)
+                q2 = q - nrm[k] * side * 2.2
+                fbox(g, q2, tan[k], 0.5, 0.25, h[k] + 8.75, h[k] + 9.0, (1.0, 0.78, 0.45), mat(M_LAMP, 0.5, 0, 7.0),
+                     bottom=True)
+            lights.append((float(pts[k][0]), h[k] + 8.0, float(pts[k][1]), 34.0, 1.0, 0.75, 0.45, 3.0))
+    for r in hd.runs(track.tu):                                           # tunel: techo y lamparas
+        e = rw[r] + 1.2
+        road_ribbon(g, track, r, np.array([-e, e]), (h[r] + 5.6)[None, :], conc2, mat(M_CONC, 0.85),
+                    orient=(0, -1, 0))
+        for k in r[::5]:
+            fbox(g, pts[k], nrm[k], 0.6, 0.3, h[k] + 5.3, h[k] + 5.55, (1.0, 0.85, 0.6), mat(M_LAMP, 0.4, 0, 8.0),
+                 bottom=True)
+            lights.append((float(pts[k][0]), h[k] + 4.8, float(pts[k][1]), 18.0, 1.0, 0.8, 0.55, 3.0))
+    # ---------------------------------------------------------------- otras calles reales
+    ways = d.get("ways", [])
+    allv = np.array([q for w in ways for q in w["p"]], float).reshape(-1, 2)
+    vi, vlat, vd = nearest_route(track, rg, allv, 40)
+    vy = T(allv)
+    k0 = 0
+    rank = {"motorway": 7, "trunk": 6, "primary": 5, "secondary": 4, "tertiary": 3, "unclassified": 2,
+            "residential": 1}
+    for w in ways:
+        P = np.array(w["p"], float)
+        m_ = len(P)
+        ii, dd, yy = vi[k0:k0 + m_], vd[k0:k0 + m_], vy[k0:k0 + m_].copy()
+        k0 += m_
+        if w.get("t"):
+            continue
+        wh = float(w["w"])
+        # fuera del corredor de la ruta (ahi manda la ruta)
+        inside = (ii >= 0) & (dd < rw[np.maximum(ii, 0)] - 0.4)
+        if w.get("b"):                                                    # paso superior / puente de otra calle
+            prof = np.minimum(np.linspace(0, 1, m_), np.linspace(1, 0, m_)) * 2
+            yy = yy + 7.2 * np.clip(prof * 2.0, 0, 1)
+            inside[:] = False
+        occ_pts = []
+        yy = yy + 0.03 + 0.012 * rank.get(w["c"], 0)
+        keep = ~inside
+        for r in hd.runs(keep) if not keep.all() else [np.arange(m_)]:
+            r = r[r < m_]
+            if len(r) < 2:
+                continue
+            Q = P[r]
+            dq = np.gradient(Q, axis=0)
+            dq /= np.maximum(np.hypot(dq[:, 0], dq[:, 1]), 1e-6)[:, None]
+            nq = np.column_stack([-dq[:, 1], dq[:, 0]])
+            PP = np.zeros((2, len(r), 3), F4)
+            for c_, sg in enumerate((-1, 1)):
+                PP[c_, :, 0] = Q[:, 0] + nq[:, 0] * sg * wh
+                PP[c_, :, 2] = Q[:, 1] + nq[:, 1] * sg * wh
+                PP[c_, :, 1] = yy[r]
+            sl = np.concatenate([[0], np.cumsum(np.hypot(*np.diff(Q, axis=0).T))])
+            UV = np.stack(np.broadcast_arrays(sl[None, :], np.array([-7.0, 7.0])[:, None]), -1).astype(F4)
+            grid(g, PP, rgb(56, 56, 60), mat(hd.M_ASPH, 0.75), UV=UV, orient=(0, 1, 0))
+            if w.get("b"):                                                # puente de otra calle: losa, vigas, columnas
+                for c_, sg in enumerate((-1, 1)):
+                    PW = PP.copy()
+                    PW[0] = PP[c_]
+                    PW[1] = PP[c_]
+                    PW[1, :, 1] = yy[r] - 1.4
+                    grid(g, PW, conc2, mat(M_CONC, 0.8))
+                for j in range(0, len(r), 3):
+                    if yy[r[j]] - vy[k0 - m_ + r[j]] > 3:
+                        q = Q[j]
+                        fcyl(g, q[0], q[1], vy[k0 - m_ + r[j]] - 1, yy[r[j]] - 1.4, 0.7, conc, mat(M_CONC, 0.8),
+                             seg=10, cap=False)
+            for q in Q:
+                occ_pts.append(q)
+            for j in range(len(Q) - 1):                                   # la calle no se llena de edificios
+                a, b = Q[j], Q[j + 1]
+                L = np.hypot(*(b - a))
+                if L > 0.5:
+                    occ.rect((a + b) / 2, (b - a) / L, L / 2 + 1.0, wh + 2.4)
+    # ---------------------------------------------------------------- edificios reales (OSM)
+    bl = d.get("bld", [])
+    PAL = FACADES
+    allb = np.array([q for b in bl for q in b["p"]], float).reshape(-1, 2)
+    bi, blat, bdist = nearest_route(track, rg, allb, 40)
+    facade_pts = []                                                       # (i, lado, distancia lateral)
+    k0 = 0
+    shops = [(np.array(p[:2]), p[2]) for p in d.get("pois", [])]
+    nb = 0
+    for b in bl:
+        P = np.array(b["p"], float)
+        m_ = len(P)
+        ii, lt, dd = bi[k0:k0 + m_], blat[k0:k0 + m_], bdist[k0:k0 + m_]
+        k0 += m_
+        if m_ < 4:
+            continue
+        cen = P.mean(0)
+        near = ii >= 0
+        if near.any() and np.min(np.abs(lt[near]) - rw[ii[near]]) < 1.2:
+            continue                                                      # se mete a la calle: se omite
+        if zones.hit(cen).any() or float(b.get("ly", 0) or 0) < 0:
+            continue
+        area = 0.5 * abs(np.dot(P[:-1, 0], P[1:, 1]) - np.dot(P[1:, 0], P[:-1, 1]))
+        if area < 12:
+            continue
+        hh = float(b.get("h") or 0) or float(b.get("lv") or 0) * 3.2
+        if hh <= 0:
+            lv = (1 + rnd.random() * 1.5 if area < 100 else 2 + rnd.random() * 2.5 if area < 400 else
+                  3 + rnd.random() * 4 if area < 1500 else 4 + rnd.random() * 6)
+            if b.get("k") in ("house", "residential", "detached"):
+                lv = min(lv, 3)
+            hh = round(lv) * 3.2 + 0.6
+        hh = min(hh, 260.0)
+        base = float(T([cen])[0]) - 2.5
+        top = base + 2.5 + hh
+        rf, sk = None, None
+        if near.any() and np.min(dd[near]) < 30:
+            E = np.roll(P, -1, 0) - P
+            mids = P + E / 2
+            ri, rl, rd = nearest_route(track, rg, mids, 30)
+            best = None
+            for j in range(m_ - 1):
+                L = np.hypot(*E[j])
+                if L < 4 or ri[j] < 0 or rd[j] > 26:
+                    continue
+                if best is None or rd[j] < best[1]:
+                    best = (j, rd[j])
+            if best is not None and rnd.random() < 0.75:
+                rf = best[0]
+                q = mids[rf]
+                base = min(base, h[ri[rf]] - 2.5)
+                sk = rnd.choice(SHOP_SIGNS)
+                for sp, kind in shops:
+                    if np.hypot(*(sp - q)) < 18:
+                        sk = POI_SIGN.get(kind, sk)
+                        break
+        osm_building(g, P, base, top, PAL[hash(tuple(P[0])) % len(PAL)], rnd, rf, sk,
+                     floor=(h[ri[rf]] + 0.19) if rf is not None else None)
+        nb += 1
+        for (x, z) in P:
+            occ.rect((x, z), (1, 0), 2, 2)
+        for j in range(m_ - 1):                                           # fachada -> pared de la fisica
+            a, b2 = P[j], P[j + 1]
+            L = np.hypot(*(b2 - a))
+            for t_ in np.linspace(0, 1, max(2, int(L / 1.5) + 1)):
+                facade_pts.append(a + (b2 - a) * t_)
+    print(f"   edificios reales: {nb}")
+    wpos = np.full(n, np.inf)
+    wneg = np.full(n, np.inf)
+    if facade_pts:
+        FP = np.array(facade_pts)
+        fi, fl, fd = nearest_route(track, rg, FP, 18)
+        ok = (fi >= 0) & (np.abs(fl) < rw[np.maximum(fi, 0)] + 14)
+        for i, l in zip(fi[ok], fl[ok]):
+            if l > 0:
+                wpos[i] = min(wpos[i], l)
+            else:
+                wneg[i] = min(wneg[i], -l)
+    # ---------------------------------------------------------------- bocacalles: cruces a nivel
+    mouth = np.zeros((n, 2), bool)                                        # [:,0] lado negativo, [:,1] positivo
+    inters = []
+    for j, sd, ci, nm in d.get("inter", []):
+        if abs(off[j]) > 0.4:
+            continue
+        half_m = int(math.ceil((SIDEWALK.get(ci, 2.3) * 2 + 7.0) / track.spacing / 2)) + 1
+        idxs = [(j + q) % n for q in range(-half_m, half_m + 1)]
+        if sd in (0, 1):
+            mouth[idxs, 1] = True
+        if sd in (0, -1):
+            mouth[idxs, 0] = True
+        inters.append((j, sd, ci))
+    # ---------------------------------------------------------------- puentes peatonales reales
+    pb_done = []
+    for i, ang in d.get("pedb", [])[:30]:
+        if abs(off[i]) > 0.4 or any(abs(i - j) < 30 for j in pb_done):
+            continue
+        ped_bridge_osm(g, crowd, rnd, track, i, ang, lights, h[i], occ)
+        pb_done.append(i)
+    # ---------------------------------------------------------------- manzanas a lo largo de la ruta (donde OSM no tiene edificios)
+    sw_des = np.array([SIDEWALK.get(int(c), 2.3) for c in track.cls])
+    stories_by = {0: [6, 8, 10], 1: [4, 6, 8], 2: [3, 4, 5, 6, 8], 3: [2, 3, 4, 5, 6], 4: [2, 3, 3, 4],
+                  5: [1, 2, 2, 3], 6: [1, 2, 2, 3], 7: [1, 2, 2], 8: [1, 2]}
+    placed_fronts = []
+    for side in (-1, 1):
+        wall = wpos if side > 0 else wneg
+        s = 0.0
+        while s < track.L - 4:
+            wdt = rnd.uniform(8.0, 20.0)
+            dp = rnd.uniform(10.0, 20.0)
+            i = int(((s + wdt / 2) % track.L) / track.spacing) % n
+            span = range(i - int(wdt / 2 / track.spacing) - 1, i + int(wdt / 2 / track.spacing) + 2)
+            spi = [q % n for q in span]
+            fd = rw[i] + 0.3 + sw_des[i]
+            bad = (np.abs(off[spi]).max() > 0.4 or mouth[spi, 1 if side > 0 else 0].any() or
+                   np.isfinite(wall[spi]).any() or track.cls[i] <= 1 or track.cls[i] >= 10)
+            if bad:
+                s += 3.0
+                continue
+            x, z, tx, tz = track.point(s + wdt / 2)
+            f, o = np.array([tx, tz]), nrm[i] * side
+            c = np.array([x, z]) + o * (fd + dp / 2)
+            corners = np.array([c + f * a + o * b for a in (-wdt / 2, wdt / 2) for b in (-dp / 2, dp / 2)])
+            cells = occ.cells(c, f, wdt / 2, dp / 2)
+            if (track.nearest_dist(corners) >= fd - 0.6).all() and occ.free(cells) and \
+                    not (zones.hit(corners) | openz.hit(corners)).any():
+                hh = rnd.choice(stories_by.get(int(track.cls[i]), [2, 3])) * 3.6 + 0.4
+                corner = any(abs(((i - j) + n // 2) % n - n // 2) * track.spacing < 14 for j, _, _ in inters)
+                yb = float(h[i]) + 0.19
+                col_ = rnd.choice(FACADES)
+                tg = Geo()
+                building_hd(tg, OffsetCrowd(crowd, yb), rnd, c, f, o, wdt / 2, dp / 2, hh, col_,
+                            shop=corner or rnd.random() < 0.8, roof_fans=hh < 14 and rnd.random() < 0.06)
+                g.merge(lift_geo(tg, yb))
+                yg_ = float(T([c])[0])
+                fbox(g, c, f, wdt / 2, dp / 2, min(yg_, yb) - 3.0, yb + 0.02, tuple(v * 0.8 for v in col_),
+                     mat(M_CONC, 0.8))
+                if corner:                                                # la tiendita de la esquina
+                    sign_quad(g, c - o * (dp / 2 + 0.07), -o, min(wdt / 2 - 0.8, 4.5), yb + 3.3, yb + 4.2,
+                              rnd.choice(CORNER_SIGNS))
+                occ.add(cells)
+                for q in spi:
+                    wall[q] = min(wall[q], fd)
+                placed_fronts.append((c - o * dp / 2, -o, hh + yb))
+                s += wdt + rnd.uniform(0.0, 1.2)
+            else:
+                s += 3.0
+    # ---------------------------------------------------------------- paredes finales, camellones, vallas y banquetas
+    for wall, sidx in ((wpos, 1), (wneg, 0)):
+        wall[:] = np.where(np.isfinite(wall), wall, rw + 0.3 + sw_des + 0.8)
+        wall[mouth[:, sidx]] = np.maximum(wall[mouth[:, sidx]], rw[mouth[:, sidx]] + 4.5)
+        wall[:] = np.minimum.reduce([np.roll(wall, q) for q in (-1, 0, 1)])
+        wall[:] = np.clip(wall, rw + 1.2, rw + 14.0)
+        wall[off > 0.4] = rw[off > 0.4] + 0.45
+        wall[off < -0.4] = rw[off < -0.4] + 0.45
+    # camellones: otra calzada paralela muy cerca de un lado
+    for side, wall in ((1, wpos), (-1, wneg)):
+        par = np.zeros(n)
+        for w in ways:
+            if w["c"] not in ("motorway", "trunk", "primary", "secondary", "tertiary"):
+                continue
+            P = np.array(w["p"], float)
+            ii, lt, dd = nearest_route(track, rg, P, 40)
+            for k_, (i, l) in enumerate(zip(ii, lt)):
+                if i < 0 or l * side <= rw[i] + 1.0 or l * side > rw[i] + 30:
+                    continue
+                par[i] = max(par[i], l * side) if par[i] == 0 else min(par[i], l * side)
+        cam = (par > 0) & (np.abs(off) < 0.4)
+        cam = np.convolve(cam.astype(float), np.ones(9), "same") > 2
+        idx = np.nonzero(cam)[0]
+        if len(idx):
+            wall[idx] = np.minimum(wall[idx], rw[idx] + 0.6)
+        for r in hd.runs(cam):
+            far = np.maximum(par[r] - 4.0, rw[r] + 1.5)
+            far = np.where(par[r] > 0, far, rw[r] + 2.5)
+            road_ribbon(g, track, r, np.array([rw[r], rw[r], rw[r] + 0.3, far]) * side,
+                        np.array([h[r] + 0.06, h[r] + 0.25, h[r] + 0.25, h[r] + 0.25]), rgb(185, 180, 165),
+                        mat(M_CONC, 0.8))
+            road_ribbon(g, track, r, np.array([rw[r] + 0.5, far - 0.2]) * side, (h[r] + 0.27)[None, :],
+                        rgb(70, 115, 45), mat(M_GRASS, 0.95))
+            for k in r[::6]:
+                if rnd.random() < 0.7:
+                    q = pts[k] + nrm[k] * side * (rw[k] + 0.5 + (far[0] - rw[k] - 0.5) * 0.5)
+                    tg = Geo()
+                    (jacaranda_hd if rnd.random() < 0.5 else tree_hd)(tg, q[0], q[1], rnd.uniform(0.9, 1.3), rnd)
+                    g.merge(lift_geo(tg, h[k] + 0.25))
+    track.wpos, track.wneg = wpos, wneg
+    fac = {1: wpos.copy(), 0: wneg.copy()}
+    # vallas con publico en tramos de banqueta (y junto a la salida y los lugares)
+    valla = np.zeros((n, 2), bool)
+    near_lm = np.zeros(n, bool)
+    for v in lm.values():
+        near_lm |= np.hypot(pts[:, 0] - v[0], pts[:, 1] - v[1]) < 260
+    near_lm[np.arange(-50, 60) % n] = True
+    for sidx in (0, 1):
+        k = 0
+        while k < n:
+            ln_ = rnd.randint(15, 60)
+            if near_lm[k] or rnd.random() < md.fans * 0.45:
+                valla[[(k + q) % n for q in range(ln_)], sidx] = True
+            k += ln_ + rnd.randint(5, 40)
+    for sidx, wall in ((1, wpos), (0, wneg)):
+        m = valla[:, sidx] & (wall > rw + 2.6) & (np.abs(off) < 0.4) & ~mouth[:, sidx]
+        valla[:, sidx] = m
+        wall[m] = rw[m] + 0.9
+    for sidx, wall in ((1, wpos), (0, wneg)):                             # banquetas con su guarnicion
+        side = 1 if sidx else -1
+        ok = (np.abs(off) < 0.4) & ~mouth[:, sidx]
+        for r in hd.runs(ok):
+            sw_out = np.clip(fac[sidx][r], rw[r] + 0.6, rw[r] + 0.3 + np.maximum(sw_des[r], 1.0) + 1.5)
+            road_ribbon(g, track, r, np.array([rw[r], rw[r], rw[r] + 0.3, sw_out, sw_out]) * side,
+                        np.array([h[r] + 0.06, h[r] + 0.19, h[r] + 0.19, h[r] + 0.19, T(pts[r]) - 0.6]),
+                        rgb(178, 174, 166), mat(M_CONC, 0.85))
+        for r in hd.runs(mouth[:, sidx] & (np.abs(off) < 0.4)):          # bocacalle: vallas que la cierran
+            for k in r[::2]:
+                q = pts[k] + nrm[k] * side * (rw[k] + 4.5)
+                fbox(g, q, tan[k], track.spacing, 0.06, h[k], h[k] + 1.1, rgb(150, 155, 160),
+                     mat(M_METAL, 0.4, 0.7))
+            for k in r[::3]:                                              # gente que mira desde la bocacalle
+                for _ in range(rnd.randint(2, 6)):
+                    q = pts[k] + nrm[k] * side * rnd.uniform(rw[k] + 5.0, rw[k] + 9.0) + tan[k] * rnd.uniform(-2, 2)
+                    crowd.add(q[0], h[k] + 0.05, q[1], -nrm[k, 0] * side, -nrm[k, 1] * side, rnd)
+        for r in hd.runs(valla[:, sidx]):                                 # vallas con aficionados
+            for k in r:
+                q = pts[k] + nrm[k] * side * (rw[k] + 0.9)
+                fbox(g, q, tan[k], track.spacing / 2, 0.05, h[k] + 0.19, h[k] + 1.25, rgb(150, 155, 160),
+                     mat(M_METAL, 0.4, 0.7))
+            for k in r[::2]:
+                far = min(fac[sidx][k], rw[k] + 0.3 + max(sw_des[k], 1.0) + 1.5) - 0.4
+                for _ in range(rnd.randint(2, 5)):
+                    lt = rnd.uniform(rw[k] + 1.3, max(rw[k] + 1.4, far))
+                    q = pts[k] + nrm[k] * side * lt + tan[k] * rnd.uniform(-1.5, 1.5)
+                    crowd.add(q[0], h[k] + 0.19, q[1], -nrm[k, 0] * side, -nrm[k, 1] * side, rnd)
+        for k in range(4, n, 13):                                         # postes de luz en la orilla
+            if abs(off[k]) > 0.4 or mouth[k, sidx]:
+                continue
+            q = pts[k] + nrm[k] * side * (rw[k] + 0.45 if not valla[k, sidx] else rw[k] + 0.7)
+            fcyl(g, q[0], q[1], h[k] + 0.19, h[k] + 9.5, 0.13, rgb(85, 92, 98), mat(M_METAL, 0.45, 0.8), seg=6, r1=0.09)
+            tip = q - nrm[k] * side * 2.6
+            cylinder(g, (q[0], h[k] + 9.3, q[1]), (tip[0], h[k] + 9.7, tip[1]), 0.07, rgb(85, 92, 98),
+                     mat(M_METAL, 0.45, 0.8), seg=5, caps=False)
+            fbox(g, tip, tan[k], 0.5, 0.22, h[k] + 9.45, h[k] + 9.7, (1.0, 0.78, 0.45), mat(M_LAMP, 0.5, 0, 7.0),
+                 bottom=True)
+            if k % 26 == 4:
+                lights.append((float(tip[0]), h[k] + 8.6, float(tip[1]), 36.0, 1.0, 0.72, 0.42, 3.2))
+    # ---------------------------------------------------------------- semaforos y cebras en los cruces
+    for j, sd, ci in inters:
+        if ci > 7:
+            continue
+        p, t_ = pts[j], tan[j]
+        for a_off in (-(rw[j] + 3.5), rw[j] + 3.5):
+            for wq in np.arange(-rw[j] + 0.6, rw[j] - 0.4, 1.2):
+                flat_rect(g, p + t_ * a_off + nrm[j] * wq, t_, 1.6, 0.28, h[j] + 0.08, (0.93, 0.93, 0.93),
+                          mat(M_LINE, 0.55))
+        for side in (-1, 1):
+            k = (j - int((rw[j] + 6) / track.spacing)) % n
+            sb = pts[k] + nrm[k] * side * (rw[k] + 0.55)
+            tg = Geo()
+            semaforo_hd(tg, sb, -nrm[k] * side, max(2.0, rw[k] * 0.9), -tan[k])
+            g.merge(lift_geo(tg, h[k] + 0.19))
+            wall = wpos if side > 0 else wneg
+            wall[k] = min(wall[k], rw[k] + 0.75)                          # el poste se puede chocar
+    # ---------------------------------------------------------------- manzanas de la ciudad (relleno de bloques)
+    fill = 240.0
+    st_ = 26.0
+    ax_ = np.arange(lo[0] + 300, hi[0] - 300, st_)
+    az_ = np.arange(lo[1] + 300, hi[1] - 300, st_)
+    FX, FZ = np.meshgrid(ax_, az_, indexing="ij")
+    C = np.column_stack([FX.ravel(), FZ.ravel()]) + np.array([[rnd.uniform(-4, 4), rnd.uniform(-4, 4)]])
+    Dr = track.nearest_dist(C)
+    C = C[(Dr > 20) & (Dr < fill)]
+    Dr = track.nearest_dist(C)
+    blocked = zones.hit(C) | openz.hit(C)
+    CY = T(C)
+    for c, dist, bl_, yb in zip(C, Dr, blocked, CY):
+        if bl_:
+            continue
+        w_, dp_ = rnd.uniform(6, 11), rnd.uniform(6, 11)
+        cells = occ.cells(c, (1, 0), w_, dp_)
+        if not occ.free(cells):
+            w_, dp_ = w_ * 0.6, dp_ * 0.6
+            cells = occ.cells(c, (1, 0), w_, dp_)
+            if not occ.free(cells):
+                continue
+        occ.add(cells)
+        hh = rnd.choice(STORIES) * 3.4 + 0.4
+        fbox(g, c, (1, 0), w_, dp_, yb - 2.0, yb + hh, rnd.choice(FACADES), mat(M_WINDOWS, 0.5, 0.05))
+        if dist < 120 and rnd.random() < 0.5:
+            fcyl(g, c[0] + w_ * 0.4, c[1], yb + hh, yb + hh + 1.4, 0.62, rgb(22, 22, 24), mat(M_DEF, 0.6), seg=8)
+    # ---------------------------------------------------------------- parques, agua, rios y arboles
+    for a in d.get("areas", []):
+        k = a["k"]
+        P = np.array(a["p"], float)
+        if len(P) < 4 or k in ("runway", "taxiway", "apron", "terminal", "stadium"):
+            continue
+        col = {"water": rgb(36, 70, 92), "park": rgb(72, 118, 46), "garden": rgb(80, 126, 52),
+               "grass": rgb(86, 130, 56), "pitch": rgb(60, 130, 50), "forest": rgb(46, 90, 36),
+               "wood": rgb(46, 90, 36), "recreation_ground": rgb(78, 122, 50), "cemetery": rgb(96, 120, 70),
+               "playground": rgb(170, 140, 100), "meadow": rgb(96, 130, 60), "scrub": rgb(90, 110, 60)}.get(k)
+        if col is None:
+            continue
+        cen = P.mean(0)
+        y = float(T([cen])[0]) - 0.28 + (0.04 if k == "water" else 0.0)
+        tri = ear_clip([tuple(p) for p in P[:-1]])
+        if not tri:
+            continue
+        TT = np.array([[P[i_], P[j_], P[k_]] for i_, j_, k_ in tri]).reshape(-1, 2)
+        g.tris(np.column_stack([TT[:, 0], np.full(len(TT), y), TT[:, 1]]), (0, 1, 0), col,
+               mat(M_DEF, 0.06, 0.25) if k == "water" else mat(M_GRASS, 0.95), TT)
+        if k in ("park", "garden", "forest", "wood", "recreation_ground"):
+            mn, mx = P.min(0), P.max(0)
+            area = 0.5 * abs(np.dot(P[:-1, 0], P[1:, 1]) - np.dot(P[1:, 0], P[:-1, 1]))
+            cnt = int(min(220, area / 260))
+            if cnt <= 0:
+                continue
+            TP = np.column_stack([np.array([rnd.uniform(mn[0], mx[0]) for _ in range(cnt * 3)]),
+                                  np.array([rnd.uniform(mn[1], mx[1]) for _ in range(cnt * 3)])])
+            inside = inside_poly(P, TP)
+            TP = TP[inside]
+            if not len(TP):
+                continue
+            okd = track.nearest_dist(TP) > rw.max() + 4
+            ty = T(TP)
+            placed_t = 0
+            for (x, z), ok_, yt in zip(TP, okd, ty):
+                if placed_t >= cnt:
+                    break
+                if ok_ and occ.free(occ.cells((x, z), (1, 0), 1.5, 1.5)):
+                    tg = Geo()
+                    (jacaranda_hd if rnd.random() < 0.2 else tree_hd)(tg, x, z, rnd.uniform(1.0, 1.6), rnd)
+                    g.merge(lift_geo(tg, yt - 0.3))
+                    placed_t += 1
+    for wv in d.get("water", []):
+        if wv.get("t", "no") != "no" or wv["k"] in ("drain",):
+            continue
+        P = np.array(wv["p"], float)
+        if len(P) < 2:
+            continue
+        wh = {"river": 10.0, "canal": 6.0, "stream": 2.5}.get(wv["k"], 3.0)
+        dq = np.gradient(P, axis=0)
+        dq /= np.maximum(np.hypot(dq[:, 0], dq[:, 1]), 1e-6)[:, None]
+        nq = np.column_stack([-dq[:, 1], dq[:, 0]])
+        yy = T(P)
+        ii, _, dd = nearest_route(track, rg, P, 40)
+        clear = ~((ii >= 0) & (dd < rw[np.maximum(ii, 0)] + 2))
+        for r in hd.runs(clear) if not clear.all() else [np.arange(len(P))]:
+            r = r[r < len(P)]
+            if len(r) < 2:
+                continue
+            PP = np.zeros((4, len(r), 3), F4)
+            for c_, (lt, dy) in enumerate(((-wh - 3, 0.0), (-wh, -1.6), (wh, -1.6), (wh + 3, 0.0))):
+                PP[c_, :, 0] = P[r, 0] + nq[r, 0] * lt
+                PP[c_, :, 2] = P[r, 1] + nq[r, 1] * lt
+                PP[c_, :, 1] = yy[r] - 0.3 + dy
+            grid(g, PP[[0, 1]], rgb(160, 156, 148), mat(M_CONC, 0.85))
+            grid(g, PP[[2, 3]], rgb(160, 156, 148), mat(M_CONC, 0.85))
+            grid(g, PP[[1, 2]], rgb(40, 100, 125), mat(M_DEF, 0.1, 0.0), orient=(0, 1, 0))
+    trees = np.array(d.get("trees", []), float).reshape(-1, 2)
+    if len(trees):
+        ti, tl_, td = nearest_route(track, rg, trees, 30)
+        ty = T(trees)
+        for (x, z), i, l, dd, yt in zip(trees, ti, tl_, td, ty):
+            if i >= 0:
+                wall = wpos[i] if l > 0 else wneg[i]
+                if abs(l) < wall + 0.8:
+                    continue
+            if not occ.free(occ.cells((x, z), (1, 0), 1.0, 1.0)):
+                continue
+            tg = Geo()
+            (jacaranda_hd if rnd.random() < 0.45 else tree_hd)(tg, x, z, rnd.uniform(0.9, 1.3), rnd)
+            g.merge(lift_geo(tg, yt - 0.3))
+    # ---------------------------------------------------------------- salida, adornos, horizonte, montanas
+    start_arch(g, track, info, lights)
+    if "papel" in md.extras or "banderines" in md.extras:
+        for k, i in enumerate(range(30, n, 70)):
+            if abs(off[i]) > 0.4:
+                continue
+            tg = Geo()
+            pa, pb = pts[i] - nrm[i] * (rw[i] + 0.4), pts[i] + nrm[i] * (rw[i] + 0.4)
+            if "banderines" in md.extras:
+                banderines_hd(tg, pa, pb, h=7.2, rows=2, k0=k)
+            else:
+                papel_picado_hd(tg, pa, pb, h=7.2, rows=3)
+            g.merge(lift_geo(tg, h[i]))
+    span = float(np.max(hi - lo)) / 2
+    for _ in range(300):
+        a = rnd.uniform(0, TAU)
+        r = rnd.uniform(span + 200, span + 1800)
+        x, z = cxm + r * math.cos(a), czm + r * math.sin(a)
+        w_, dp_ = rnd.uniform(25, 60), rnd.uniform(25, 60)
+        hh = rnd.choice([12, 18, 25, 35, 50, 70, 90])
+        fbox(g, (x, z), (1, 0), w_ / 2, dp_ / 2, gmin - 1, gmin + hh, rnd.choice(FACADES), mat(M_WINDOWS, 0.4, 0.1))
+    if md.mountains:
+        for k in range(26):
+            a = k / 26 * TAU + rnd.uniform(-0.1, 0.1)
+            r = span + 2600 + rnd.uniform(0, 900)
+            tg = Geo()
+            mountain_hd(tg, cxm + r * math.cos(a), czm + r * math.sin(a), rnd.uniform(800, 1400),
+                        rnd.uniform(300, 650), rnd)
+            g.merge(lift_geo(tg, gmin))
+    if md.volcanoes:
+        tg = Geo()
+        d0 = span + 3300
+        mountain_hd(tg, cxm + d0, czm + 1000, 1900, 1350, rnd, snow=1.0, seg=36, rings=14)
+        mountain_hd(tg, cxm + d0 - 300, czm - 1000, 2300, 1100, rnd, snow=1.0, seg=36, rings=14)
+        g.merge(lift_geo(tg, gmin))
+    cams = []
+    for i in range(0, n, 40):
+        side = 1 if (i // 40) % 2 else -1
+        wall = wpos if side > 0 else wneg
+        c = pts[i] + nrm[i] * side * max(rw[i] + 0.6, wall[i] - 0.8)
+        cams.append((float(c[0]), 5.5 + max(0.0, off[i]) * 0.0, float(c[1])))
+    info["tvcams"] = cams
+    if not gc.parts:
+        quad(gc, (0, -500, 0), (0.1, -500, 0), (0.1, -500, 0.1), (0, -500, 0.1), (0, 0, 0), mat(0))
+    return g, gc, crowd, lights, info
+
+
+def build_osm_landmarks(g, gc, crowd, rnd, track, md, info, lights, lm, zones, openz, occ, T):
+    """Los lugares reales de cada mapa, en su posicion real y a la altura del suelo."""
+    pts = track.pts
+
+    def gy(c):
+        return float(T([c])[0])
+
+    def clear_of_route(c, need):
+        return float(track.nearest_dist(np.asarray(c, float)[None])[0]) >= need
+    v = md.venue or {}
+    for key in md.landmarks:
+        kind = key[0] if isinstance(key, tuple) else key
+        if kind == "estadio_concierto" and "fraynano" in lm:                 # Fray Nano: beisbol + Limp Bizkit
+            c0 = lm["fraynano"]
+            dmax = float(track.nearest_dist(c0[None])[0])
+            rmax = max(45.0, min(105.0, dmax - track.rw.max() - 8))
+            rows = 24
+            r0 = rmax - rows
+            sc = c0 if clear_of_route(c0, rmax + 12) else fit_spot(track, c0, rmax + 14, zones)
+            y0 = gy(sc)
+            i_n = int(np.argmin(np.hypot(*(pts - sc).T)))
+            tt = (pts[i_n] - sc) / max(np.hypot(*(pts[i_n] - sc)), 1e-6)
+
+            def fn(tg, tc, tl):
+                ang = np.linspace(0, TAU, 65)
+                for j in range(64):
+                    quad(tg, (sc[0], 0.03, sc[1]), (sc[0], 0.03, sc[1]),
+                         (sc[0] + (r0 + 0.5) * math.cos(ang[j + 1]), 0.03, sc[1] + (r0 + 0.5) * math.sin(ang[j + 1])),
+                         (sc[0] + (r0 + 0.5) * math.cos(ang[j]), 0.03, sc[1] + (r0 + 0.5) * math.sin(ang[j])),
+                         rgb(150, 146, 138), mat(M_CONC, 0.75))
+                baseball_field_hd(tg, sc, r0, tt)
+                rm, Hb = bowl_hd(tg, tc, rnd, track, sc, r0, tl, rows=rows, dd=1.0, dh=0.55, inst_rows=10)
+                for k in range(6):
+                    a = math.atan2(tt[1], tt[0]) + (k + 0.5) / 6 * TAU
+                    q = sc + np.array([math.cos(a), math.sin(a)]) * (rm + 2.5)
+                    fcyl(tg, q[0], q[1], 0, Hb + 30, 0.7, rgb(140, 145, 150), mat(M_METAL, 0.4, 0.9), seg=10, r1=0.45)
+                    fq = -np.array([math.cos(a), math.sin(a)])
+                    frame_box(tg, q + fq * 0.7, (-fq[1], fq[0]), (4.6, 0.1), (1.0, 0.95, 0.85),
+                              mat(M_LAMP, 0.4, 0, 8.0), Hb + 29.5, Hb + 33.5)
+                    tl.append((float(q[0] + fq[0] * 20), Hb + 20, float(q[1] + fq[1] * 20), 90.0, 1.0, 0.95, 0.85, 4.0))
+                sign_quad(tg, sc + tt * (rm + 0.6), tt, 20, Hb - 6, Hb + 2, 9)
+                sign_quad(tg, sc + tt * (rm + 0.6) + np.array([-tt[1], tt[0]]) * 26, tt, 12, Hb - 7, Hb - 1, md.band_sign)
+                for _ in range(900):
+                    a, rr = rnd.uniform(0, TAU), rnd.uniform(rm + 3, rm + 22)
+                    x, z = sc[0] + rr * math.cos(a), sc[1] + rr * math.sin(a)
+                    if clear_of_route((x, z), track.rw.max() + 4):
+                        tc.add(x, 0.0, z, sc[0] - x, sc[1] - z, rnd)
+                return rm, Hb
+            rm, Hb = placed(g, crowd, lights, y0, fn)
+            if md.concert:
+                tg, inf = Geo(), {}
+                build_concert_hd(tg, OffsetCrowd(crowd, y0), rnd, track, sc, r0, rm, Hb, inf)
+                gc.merge(lift_geo(tg, y0))
+                shift_info(inf, y0)
+                info.update(inf)
+            info["stadium"] = (sc, rm, r0)
+            zones.circle(sc, rm + 8)
+            openz.circle(sc, rm + 24)
+        elif kind in ("gnp", "palacio") and kind in lm:
+            c0 = lm[kind]
+            if kind == "gnp":
+                dmax = float(track.nearest_dist(c0[None])[0])
+                r0 = max(50.0, min(95.0, dmax - 60))
+                sc = c0
+                y0 = gy(sc)
+
+                def fn(tg, tc, tl):
+                    ang = np.linspace(0, TAU, 65)
+                    for j in range(64):
+                        quad(tg, (sc[0], 0.03, sc[1]), (sc[0], 0.03, sc[1]),
+                             (sc[0] + r0 * math.cos(ang[j + 1]), 0.03, sc[1] + r0 * math.sin(ang[j + 1])),
+                             (sc[0] + r0 * math.cos(ang[j]), 0.03, sc[1] + r0 * math.sin(ang[j])), rgb(60, 125, 50),
+                             mat(M_GRASS, 0.9))
+                    rm, Hb = bowl_hd(tg, tc, rnd, track, sc, r0, tl, rows=30, dd=1.0, dh=0.5, inst_rows=4)
+                    i_n = int(np.argmin(np.hypot(*(pts - sc).T)))
+                    tt = (pts[i_n] - sc) / max(np.hypot(*(pts[i_n] - sc)), 1e-6)
+                    sign_quad(tg, sc + tt * (rm + 3.6), tt, 30, Hb + 1, Hb + 9, 12)
+                    return rm, Hb
+                rm, Hb = placed(g, crowd, lights, y0, fn)
+                if md.concert:
+                    tg = Geo()
+                    build_concert_hd(tg, OffsetCrowd(crowd, y0), rnd, track, sc, r0, rm, Hb, {})
+                    remap_sign(tg, 10, 2)
+                    gc.merge(lift_geo(tg, y0))
+                zones.circle(sc, rm + 10)
+            else:
+                y0 = gy(c0)
+                placed(g, crowd, lights, y0, lambda tg, tc, tl: palacio_hd(tg, c0, 70.0, tl))
+                zones.circle(c0, 80)
+        elif kind == "aicm":
+            rw_ = [a for a in track.osm.get("areas", []) if a["k"] == "runway"]
+            if rw_:
+                best = max(rw_, key=lambda a: np.hypot(*(np.array(a["p"][-1]) - np.array(a["p"][0]))))
+                P = np.array(best["p"], float)
+                a0, a1 = P[0], P[-1]
+                if a0[0] > a1[0]:
+                    a0, a1 = a1, a0
+                dv = (a1 - a0) / np.linalg.norm(a1 - a0)
+                y0 = gy(a0)
+                res = {}
+
+                def fn(tg, tc, tl):
+                    res["f"] = airport_hd(tg, rnd, a0, dv, tl, zones, track, openz)
+                placed(g, crowd, lights, y0, fn)
+                flights, plane = res["f"]
+                for fl in flights:
+                    fl["y0"] = y0
+                info["flights"], info["plane_geo"] = flights, plane
+        elif kind == "museo" and "museo" in lm:
+            c0 = lm["museo"]
+            c = c0 if clear_of_route(c0, 70) else fit_spot(track, c0, 70, zones)
+            i_n = int(np.argmin(np.hypot(*(pts - c).T)))
+            placed(g, crowd, lights, gy(c), lambda tg, tc, tl: museo_hd(tg, c, track.tan[i_n], tl))
+            zones.rect(c, track.tan[i_n], 83, 51)
+        elif kind == "castillo" and "castillo" in lm:
+            c = lm["castillo"]
+            r = max(40.0, float(track.nearest_dist(c[None])[0]) - track.rw.max() - 10)
+            placed(g, crowd, lights, gy(c) - 2, lambda tg, tc, tl: castillo_hd(tg, rnd, c, r, tl))
+            zones.circle(c, r)
+        elif kind == "angel" and "angel" in lm:
+            c = lm["angel"]
+            if not clear_of_route(c, 12):
+                c = fit_spot(track, c, 14, zones)
+            y0 = gy(c)
+
+            def fn(tg, tc, tl):
+                angel_hd(tg, c[0], c[1], tl)
+                for _ in range(350):
+                    a, rr = rnd.uniform(0, TAU), rnd.uniform(9, 30)
+                    x, z = c[0] + rr * math.cos(a), c[1] + rr * math.sin(a)
+                    if clear_of_route((x, z), track.rw.max() + 3):
+                        tc.add(x, 0.1, z, c[0] - x, c[1] - z, rnd)
+            placed(g, crowd, lights, y0, fn)
+            info["angel"] = c
+            zones.circle(c, 12)
+        elif kind == "monumento":
+            c = lm.get("monumento")
+            if c is None:
+                continue
+            i = int(np.argmin(np.hypot(*(pts - c).T)))
+            if np.hypot(*(pts[i] - c)) < 45:
+                placed(g, crowd, lights, track.h[i], lambda tg, tc, tl: monumento_rev_hd(tg, track, i, tl))
+                zones.circle(pts[i], LIMIT + 12)
+        elif kind == "basilica" and "basilica" in lm:
+            c0 = lm["basilica"]
+            c = c0 if clear_of_route(c0, 100) else fit_spot(track, c0, 100, zones)
+            i_n = int(np.argmin(np.hypot(*(pts - c).T)))
+            f = (pts[i_n] - c) / max(np.hypot(*(pts[i_n] - c)), 1e-6)
+            placed(g, crowd, lights, gy(c), lambda tg, tc, tl: basilica_hd(tg, tc, rnd, c, f, tl))
+            zones.circle(c, 100)
+        elif kind == "fanfest" and "monumento" in lm:
+            r0 = float(v.get("r0", 45))
+            sc = fit_spot(track, lm["monumento"] + np.array([120.0, 60.0]), r0 + 8 + track.rw.max() + 4, zones,
+                          search=500)
+            y0 = gy(sc)
+            tg, gct, inf, tl = Geo(), Geo(), {}, []
+            fanfest_hd(tg, gct, OffsetCrowd(crowd, y0), rnd, track, sc, r0, md, inf, tl)
+            g.merge(lift_geo(tg, y0))
+            gc.merge(lift_geo(gct, y0))
+            lights += [(l[0], l[1] + y0) + tuple(l[2:]) for l in tl]
+            shift_info(inf, y0)
+            info.update(inf)
+            zones.circle(sc, r0 + 10)
+            openz.circle(sc, r0 + 14)
+        elif kind == "feria" and "jardin" in lm:
+            r0 = float(v.get("r0", 34))
+            sc = fit_spot(track, lm["jardin"] + np.array([-160.0, 120.0]), r0 + 62 + track.rw.max() + 3, zones,
+                          search=600)
+            y0 = gy(sc)
+            tg, gct, inf, tl = Geo(), Geo(), {}, []
+            feria_hd(tg, gct, OffsetCrowd(crowd, y0), rnd, track, sc, r0, md, inf, tl)
+            g.merge(lift_geo(tg, y0))
+            gc.merge(lift_geo(gct, y0))
+            lights += [(l[0], l[1] + y0) + tuple(l[2:]) for l in tl]
+            shift_info(inf, y0)
+            for sp in inf.get("spinners", []):
+                x, y, z = sp["c"]
+                sp["c"] = (x, y + y0, z)
+            info.update(inf)
+            zones.circle(sc, r0 + 64)
+        elif kind == "jardin" and "jardin" in lm:
+            c0 = lm["jardin"]
+            r = 40.0
+            c = c0 if clear_of_route(c0, r + track.rw.max() + 2) else fit_spot(track, c0, r + 10, zones)
+            i_n = int(np.argmin(np.hypot(*(pts - c).T)))
+            f = (pts[i_n] - c) / max(np.hypot(*(pts[i_n] - c)), 1e-6)
+            placed(g, crowd, lights, gy(c), lambda tg, tc, tl: jardin_hd(tg, tc, rnd, c, r, f, tl))
+            zones.circle(c, r + 2)
+        elif kind == "catedral" and "catedral" in lm:
+            c0 = lm["catedral"]
+            c = c0 if clear_of_route(c0, 50) else fit_spot(track, c0, 52, zones)
+            i_n = int(np.argmin(np.hypot(*(pts - c).T)))
+            f = (pts[i_n] - c) / max(np.hypot(*(pts[i_n] - c)), 1e-6)
+            placed(g, crowd, lights, gy(c), lambda tg, tc, tl: catedral_hd(tg, c, f, tl))
+            zones.circle(c, 50)
+        elif kind == "cajadelagua" and "cajadelagua" in lm:
+            c0 = lm["cajadelagua"]
+            c = c0 if clear_of_route(c0, 10) else fit_spot(track, c0, 12, zones)
+            placed(g, crowd, lights, gy(c), lambda tg, tc, tl: caja_agua_hd(tg, c, tl))
+            zones.circle(c, 9)
+        elif kind == "edificio" and key[1] in lm:                          # ("edificio", nombre, letrero, color)
+            c0 = lm[key[1]]
+            hl, hw_, hh = 40.0, 16.0, 22.0
+            c = c0 if clear_of_route(c0, hw_ + 14) else fit_spot(track, c0, hw_ + 16, zones)
+            i_n = int(np.argmin(np.hypot(*(pts - c).T)))
+            placed(g, crowd, lights, gy(c), lambda tg, tc, tl: edificio_hd(tg, c, track.tan[i_n], hl, hw_, hh,
+                                                                           key[3], key[2], tl))
+            zones.rect(c, track.tan[i_n], hl + 2, hw_ + 2)
+
+
+def shift_info(inf, dy):
+    for k in ("launch", "flames", "fireballs", "fountain", "movers"):
+        if k in inf:
+            inf[k] = [(p[0], p[1] + dy, p[2]) for p in inf[k]]
+
+
+def make_track(md):
+    return OSMTrack(md) if md.osm else MapTrack(md)
+
+
 BUILD_WORLD_CDMX = hd.build_world        # escenario original del Autodromo (se guarda antes de reemplazarlo)
 
 
@@ -1792,6 +3384,8 @@ def build_world_for(track):
     md = track.md
     if md.builder == "cdmx":
         return BUILD_WORLD_CDMX(track)
+    if md.builder == "osm":
+        return build_world_osm(track, md)
     if md.builder == "calles":
         return build_world_streets(track, md)
     return build_world_auto(track, md)
@@ -1818,13 +3412,14 @@ SONG_EXT = (".mp3", ".ogg", ".wav", ".flac")
 class GameMaps(hd.GameHD):
     def __init__(self, headless=False, map_key=None):
         for m in MAPS:                                   # largo de cada pista (para el selector)
-            m.length = MapTrack(m).L
+            m.length = make_track(m).L
         self.map_i = map_index(map_key) if map_key and map_index(map_key) is not None else 0
         self.map_sel = self.map_i
         self.pending_map = None
         self._gpu = []
         self.plane_vao = None
-        hd.Track = lambda: MapTrack(MAPS[self.map_i])   # el juego base construye la pista y el mundo del mapa
+        self.spin_vao = {}
+        hd.Track = lambda: make_track(MAPS[self.map_i])  # el juego base construye la pista y el mundo del mapa
         hd.build_world = build_world_for
         hd.StaticChunks = self._chunks
         hd.LAPS = MAPS[self.map_i].laps
@@ -1879,33 +3474,168 @@ class GameMaps(hd.GameHD):
 
     # ------------------------------------------------------------ aviones del aeropuerto
     def setup_planes(self):
+        """Objetos animados del mapa: aviones del aeropuerto y juegos mecanicos de la feria."""
         geo = self.info.get("plane_geo")
         self.plane_vao = self.R.vao_scene(geo.array()) if geo is not None else None
+        self.spin_vao = {}
+        for sp in self.info.get("spinners", []):
+            if sp["kind"] == "rueda" and "rueda" not in self.spin_vao:
+                self.spin_vao["rueda"] = self.R.vao_scene(rueda_geo(sp["R"]).array())
+                self.spin_vao["gondola"] = self.R.vao_scene(gondola_geo().array())
+            elif sp["kind"] == "carrusel" and "carrusel" not in self.spin_vao:
+                self.spin_vao["carrusel"] = self.R.vao_scene(carrusel_geo().array())
 
-    def plane_models(self):
+    def anim_models(self):
+        """[(matriz, posicion, vao, radio)] de todo lo que se mueve en el escenario."""
         out = []
-        for fl in self.info.get("flights", []):
-            p = flight_pose(fl, self.t)
-            if p is not None:
-                x, y, z, ang, pitch = p
-                out.append((model_full(x, y, z, ang, 0.0, pitch), (x, y, z)))
+        if self.plane_vao is not None:
+            for fl in self.info.get("flights", []):
+                p = flight_pose(fl, self.t)
+                if p is not None:
+                    x, y, z, ang, pitch = p
+                    out.append((model_full(x, y, z, ang, 0.0, pitch), (x, y, z), self.plane_vao, 40.0))
+        for sp in self.info.get("spinners", []):
+            x, y, z = sp["c"]
+            th = self.t * sp["w"]
+            if sp["kind"] == "rueda" and "rueda" in self.spin_vao:
+                yaw, R = sp["yaw"], sp["R"]
+                out.append((model_full(x, y, z, yaw, 0.0, th), (x, y, z), self.spin_vao["rueda"], R + 3))
+                for k in range(16):
+                    a = th + k / 16 * TAU
+                    lx, ly = R * math.cos(a), R * math.sin(a)
+                    q = (x + math.cos(yaw) * lx, y + ly, z + math.sin(yaw) * lx)
+                    out.append((model_full(*q, yaw), q, self.spin_vao["gondola"], 3.0))
+            elif sp["kind"] == "carrusel" and "carrusel" in self.spin_vao:
+                out.append((model_full(x, 0.0, z, th), (x, 4.0, z), self.spin_vao["carrusel"], sp["R"] + 2))
         return out
 
     def draw_cars(self, prog, items, shadow=False, headl=0.0):
         super().draw_cars(prog, items, shadow, headl)
-        if self.plane_vao is None or self.state in ("select", "lobby"):
+        if self.state in ("select", "lobby"):
             return
-        for M_, pos in self.plane_models():
+        anims = self.anim_models()
+        for M_, pos, vao, r in anims:
             if not shadow and hasattr(self, "L_pos"):
-                self.light_bytes(pos, 40.0, prog)
+                self.light_bytes(pos, r, prog)
             setu(prog, u_model=gl_bytes(M_))
-            self.plane_vao[1 if shadow else 0].render()
-        setu(prog, u_model=gl_bytes(np.identity(4, F4)))
+            vao[1 if shadow else 0].render()
+        if anims:
+            setu(prog, u_model=gl_bytes(np.identity(4, F4)))
 
     def _wrap_fx(self):
         self.fx.__class__ = MapFX
         self.fx.__dict__.pop("concert", None)
         self.fx.allow_concert = self.md.concert
+        fx = self.fx
+        if getattr(fx, "_lifted", False):
+            return
+        fx._lifted = True
+        for name, where in (("sparks", lambda a: (a[0], a[1])), ("confetti", lambda a: (a[0], a[1])),
+                            ("nitro_flame", lambda a: (a[0].x, a[0].z))):
+            orig = getattr(fx, name)
+
+            def wrapped(*a, _orig=orig, _where=where, **k):
+                n0, f0 = len(fx.p), len(fx.flashes)
+                r = _orig(*a, **k)
+                tr = self.track
+                if isinstance(tr, OSMTrack):
+                    y = self.ground_y(*_where(a))
+                    if len(fx.p) > n0:
+                        fx.p[n0:, 1] += y
+                    fx.flashes = fx.flashes[:f0] + [(fl[0], fl[1] + y) + tuple(fl[2:]) for fl in fx.flashes[f0:]]
+                return r
+            setattr(fx, name, wrapped)
+
+    # ------------------------------------------------------------ alturas (calles reales con subidas y puentes)
+    def ground_y(self, x, z):
+        tr = self.track
+        if not isinstance(tr, OSMTrack):
+            return 0.0
+        i = int(np.argmin((tr.pts[:, 0] - x) ** 2 + (tr.pts[:, 1] - z) ** 2))
+        return float(tr.h[i])
+
+    def car_y(self, c):
+        tr = self.track
+        if not isinstance(tr, OSMTrack) or not hasattr(c, "u"):
+            return 0.0, 0.0
+        u = c.u if not getattr(c, "remote", False) else c.u
+        return tr.h_at(u), tr.slope_at(u)
+
+    def car_models(self, cars):
+        if not isinstance(self.track, OSMTrack) or self.state in ("select", "lobby"):
+            return super().car_models(cars)
+        out = []
+        tr = self.track
+        for c in cars:
+            vis = c.vis
+            y, sl = self.car_y(c)
+            i = int((c.u % tr.L) / tr.spacing) % tr.n
+            along = math.cos(c.ang) * tr.tan[i, 0] + math.sin(c.ang) * tr.tan[i, 1]
+            M = model_full(c.x, y, c.z, c.ang, c.roll, c.pitch + math.atan(sl) * along)
+            r = vis["info"]["radius"]
+            wheels = []
+            for wx, wz in vis["info"]["wheels"]:
+                for side in (-1, 1):
+                    W_ = M @ hd.mat_T(wx, r, side * wz)
+                    if wx > 0:
+                        W_ = W_ @ hd.mat_Ry(-c.steer * 0.45)
+                    if side < 0:
+                        W_ = W_ @ hd.MIRROR_Z
+                    wheels.append(W_ @ hd.mat_Rz(-c.wheel_rot))
+            out.append((c, vis, M, wheels))
+        return out
+
+    def camera(self, dt):
+        eye, target, fov = super().camera(dt)
+        if isinstance(self.track, OSMTrack) and self.state not in ("select", "lobby"):
+            y = self.ground_y(target[0], target[2])
+            eye = (eye[0], eye[1] + y, eye[2])
+            target = (target[0], target[1] + y, target[2])
+        return eye, target, fov
+
+    def gather_lights(self, eye, tod):
+        r = super().gather_lights(eye, tod)
+        if isinstance(self.track, OSMTrack) and len(self.L_pos) and self.state not in ("select", "lobby"):
+            P = self.L_pos
+            for c in self.cars:                                   # faros y nitro a la altura del coche
+                y, _ = self.car_y(c)
+                m = (P[:, 1] < 1.6) & ((P[:, 0] - c.x) ** 2 + (P[:, 2] - c.z) ** 2 < 150)
+                P[m, 1] += y
+            self._lkey = None
+            return self.light_bytes(None, 0)
+        return r
+
+    def collide_cars(self):
+        if not isinstance(self.track, OSMTrack):
+            return super().collide_cars()
+        # coches en distinto nivel (uno en el puente, otro abajo) no chocan
+        cs = self.cars
+        ys = [self.car_y(c)[0] for c in cs]
+        saved = []
+        for i in range(len(cs)):
+            for j in range(i + 1, len(cs)):
+                if abs(ys[i] - ys[j]) > 2.5 and math.hypot(cs[i].x - cs[j].x, cs[i].z - cs[j].z) < 8:
+                    saved.append((cs[j], cs[j].x))
+                    cs[j].x += 1000.0
+        super().collide_cars()
+        for c, _ in saved:
+            c.x -= 1000.0
+
+    def hud_race(self):
+        super().hud_race()
+        tr = self.track
+        if not isinstance(tr, OSMTrack):
+            return
+        p = self.player
+        nm = tr.names[tr.name_idx[p.idx % tr.n]] if tr.names else ""
+        if nm != getattr(self, "_street", None):
+            self._street, self._street_t = nm, 0.0
+        self._street_t = getattr(self, "_street_t", 0.0) + 1 / 60
+        if nm and self._street_t < 5.0:
+            a = int(255 * hd.clamp(min(self._street_t / 0.4, (5.0 - self._street_t) / 0.8), 0, 1))
+            w = font(24).size(nm.upper())[0] + 60
+            self.panel((WIN_W // 2 - w // 2, 64, w, 38), int(a * 0.7), accent=(40, 200, 120))
+            self.txt(nm.upper(), 24, (255, 255, 255), (WIN_W // 2 + 6, 83), "center", alpha=a)
 
     # ------------------------------------------------------------ cambio de mapa
     def _keepalive(self):
@@ -1944,7 +3674,7 @@ class GameMaps(hd.GameHD):
 
         def work():
             try:
-                tr = MapTrack(md)
+                tr = make_track(md)
                 res["world"] = (tr, build_world_for(tr))
             except BaseException as e:            # se vuelve a lanzar en el hilo principal
                 res["err"] = e
@@ -2049,9 +3779,11 @@ class GameMaps(hd.GameHD):
             if self._fw <= 0:
                 self._fw = random.uniform(0.1, 0.3)
                 ref = self.player if self.state != "menu" else self.cars[getattr(self, "tv_target", 0) % len(self.cars)]
-                x, z, dx, dz = self.track.point(ref.s + random.uniform(-80, 500))
+                su = ref.s + random.uniform(-80, 500)
+                x, z, dx, dz = self.track.point(su)
                 side, off = random.choice((-1, 1)), LIMIT + random.uniform(12, 120)
-                self.fx.spawn((x - dz * side * off, 1.0, z + dx * side * off),
+                y0 = self.track.h_at(su) if hasattr(self.track, "h_at") else 0.0
+                self.fx.spawn((x - dz * side * off, 1.0 + y0, z + dx * side * off),
                               [random.gauss(0, 4), random.uniform(30, 46), random.gauss(0, 4)], [3.0, 2.2, 1.2], 3.5,
                               1.4, 1)
         pads = self.info.get("pads")
