@@ -15,6 +15,11 @@ PISTAS
                        semaforos, cebras, locales, puestos y mucho publico.
                        Soundtrack de noche: pon las canciones en la carpeta "music_limp_bizkit"
                        (mientras este vacia suena la musica de carrera del juego).
+  CHAPULTEPEC          Fiesta del Mundial, 11.6 km de pura velocidad: sale del Museo de Antropologia por
+                       Paseo de la Reforma (Angel, torres), cruza Insurgentes, pasa bajo los arcos del Monumento
+                       a la Revolucion (Fan Fest), sube a la Basilica, regresa por Insurgentes y entra al bosque
+                       rodeando el Castillo. Rampas de turbo, banderines, balones gigantes y, de noche, fuegos
+                       artificiales en toda la ruta. Soundtrack de noche: carpeta "music_mundial".
 
 COMO AGREGAR UNA PISTA NUEVA
   Copia la plantilla PLANTILLA_DE_MAPA, cambia la clave, el nombre y los puntos del trazado (en metros,
@@ -26,6 +31,7 @@ Requiere en la misma carpeta: gtc_racing_hd.py y gtc_racing_3d.py.
 import math
 import os
 import random
+import sys
 import threading
 import time
 
@@ -84,7 +90,8 @@ class MapDef:
     def __init__(self, key, name, subtitle, control, scale=1.0, stadium=None, stadium_scale=1.0, concert=False,
                  laps=3, ground="pasto", trees=700, city=True, mountains=True, volcanoes=True,
                  extras=("papel",), stands=4, bridges=2, pits=True, builder="auto", venue=None, landmarks=(),
-                 urban=False, ped_bridges=0, fans=0.75, signs=None, band_sign=10, music_dir="music"):
+                 urban=False, ped_bridges=0, fans=0.75, signs=None, band_sign=10, music_dir="music",
+                 palette=None, fireworks=False, pads=0, city_margin=750.0, city_step=34.0, detail_dist=400.0):
         self.key, self.name, self.subtitle = key, name, subtitle
         self.control, self.scale = list(control), scale
         self.stadium, self.stadium_scale = stadium, stadium_scale
@@ -98,6 +105,9 @@ class MapDef:
         self.signs, self.band_sign, self.music_dir = dict(signs or {}), band_sign, music_dir
         self.venue_name = (venue or {}).get("name", "ESTADIO GNP SEGUROS")
         self.band = (venue or {}).get("band", "AVENGED SEVENFOLD")
+        self.venue_tag = (venue or {}).get("tag", "EN VIVO")
+        self.palette, self.fireworks, self.pads = palette, fireworks, pads
+        self.city_margin, self.city_step, self.detail_dist = city_margin, city_step, detail_dist
         self.length = None
 
     def w(self, p):
@@ -112,6 +122,19 @@ FRAY_NANO_ROUTE = [(414, 380), (445, 341), (500, 272), (540, 226), (575, 221), (
                    (700, 80), (716, 42), (745, 22), (790, 24), (830, 62), (885, 104), (942, 138), (930, 182),
                    (900, 220), (860, 300), (830, 362), (805, 403), (770, 410), (700, 405), (640, 405), (550, 418),
                    (470, 420), (422, 420), (396, 412), (390, 397)]
+
+# Ruta del Mundial (puntos del mapa, 1 px = 4.5 m): sale del Museo de Antropologia por Paseo de la Reforma,
+# pasa el Angel, cruza Insurgentes, pasa bajo el Monumento a la Revolucion, sube a la Basilica, regresa por
+# Insurgentes y entra al bosque de Chapultepec rodeando el Castillo hasta la meta.
+CHAPULTEPEC_ROUTE = [
+    (45, 687), (110, 694), (185, 702), (215, 698), (245, 689), (275, 678), (305, 667), (335, 657), (360, 648),
+    (380, 637), (398, 610), (415, 582), (425, 562), (436, 548), (452, 543), (475, 547), (505, 549), (530, 535),
+    (555, 505), (580, 478), (610, 452), (640, 432), (660, 400), (680, 355), (700, 310), (712, 270), (725, 230),
+    (745, 180), (768, 135), (785, 100), (795, 70), (790, 40), (775, 25), (752, 17), (735, 22), (715, 45),
+    (690, 85), (660, 125), (630, 170), (600, 195), (570, 222), (545, 250), (520, 280), (495, 312), (470, 340),
+    (452, 368), (440, 420), (428, 470), (410, 510), (390, 550), (372, 590), (358, 625), (350, 655), (343, 685),
+    (336, 708), (320, 717), (290, 719), (255, 723), (220, 730), (190, 737), (150, 738), (100, 736), (60, 735),
+    (25, 734), (-5, 740), (-35, 748), (-62, 738), (-78, 714), (-70, 690), (-45, 680), (-15, 683), (15, 686)]
 
 MAPS = [
     MapDef("cdmx", "ESTADIO GNP SEGUROS", "Autódromo · concierto de Avenged Sevenfold",
@@ -129,6 +152,22 @@ MAPS = [
                   10: ((5, 5, 5), (70, 30, 0), "LIMP BIZKIT", (255, 120, 20)),
                   14: ((5, 5, 5), (50, 30, 0), "HOY EN VIVO · LIMP BIZKIT", (255, 170, 40))},
            band_sign=10, music_dir="music_limp_bizkit"),
+    MapDef("chapultepec", "CHAPULTEPEC", "Reforma · Insurgentes · fiesta del Mundial",
+           control=CHAPULTEPEC_ROUTE, scale=4.5, laps=1, concert=True, builder="calles", urban=True,
+           ped_bridges=10, fans=0.85, extras=("banderines", "balones", "guadalupe"), palette="mexico",
+           fireworks=True, pads=14, city_margin=450.0, city_step=40.0, detail_dist=250.0,
+           venue=dict(name="MONUMENTO A LA REVOLUCIÓN", band="FIESTA MUNDIALISTA", tag="¡VAMOS MÉXICO!",
+                      pos=(482, 600), r0=55, kind="fanfest"),
+           landmarks=[("museo", (95, 662)), ("parque", ((-110, 650), (125, 778)), 900), ("lago", (70, 713), (70, 24)),
+                      ("castillo", (-36, 713)), ("angel", (240, 676)), ("torres", (0.025, 0.105), 10),
+                      ("monumento", (420, 570)), ("basilica", (815, 35))],
+           signs={1: ((0, 104, 71), (0, 140, 90), "MUNDIAL 2026", (255, 255, 255)),
+                  2: ((206, 17, 38), (240, 40, 60), "¡GOOOOL!", (255, 255, 255)),
+                  9: ((0, 104, 71), (20, 140, 90), "¡VAMOS MÉXICO!", (255, 255, 255)),
+                  10: ((10, 10, 10), (0, 80, 50), "FAN FEST CDMX", (255, 215, 40)),
+                  12: ((10, 25, 80), (25, 60, 150), "PASEO DE LA REFORMA", (255, 255, 255)),
+                  14: ((5, 5, 5), (0, 60, 40), "HOY: FIESTA MUNDIALISTA", (255, 215, 40))},
+           band_sign=10, music_dir="music_mundial"),
     # --- aqui van las pistas nuevas ---
 ]
 
@@ -183,6 +222,49 @@ class MapTrack(base.Track):
         if md.urban:                      # en la calle no hay grava: muros
             self.sand[:] = False
         self.center = self.pts.mean(axis=0)
+        self.cross_pts = self.find_crossings() if md.urban else []
+
+    def find_crossings(self):
+        """Lugares donde la pista se cruza consigo misma: [(i, j, punto)] con i < j."""
+        P, n = self.pts, self.n
+        cand = []
+        for i in range(0, n, 2):
+            d = np.hypot(P[:, 0] - P[i, 0], P[:, 1] - P[i, 1])
+            ds = np.abs(self.cum - self.cum[i])
+            d[np.minimum(ds, self.L - ds) < 150] = 1e9
+            j = int(np.argmin(d))
+            if d[j] < 2 * LIMIT:
+                cand.append((float(d[j]), i, j))
+        out = []
+        for d, i, j in sorted(cand):
+            i, j = min(i, j), max(i, j)
+            if any(min(abs(i - a), n - abs(i - a)) < 60 or min(abs(i - b), n - abs(i - b)) < 60 for a, b, _ in out):
+                continue
+            out.append((i, j, (P[i] + P[j]) / 2))
+        return out
+
+    def project(self, x, z):
+        """Con cruces: cada coche se busca solo cerca de donde iba (para no 'saltar' a la otra calle)."""
+        if not self.cross_pts:
+            return base.Track.project(self, x, z)
+        car = sys._getframe(1).f_locals.get("self")
+        i0 = getattr(car, "idx", None)
+        if not isinstance(i0, (int, np.integer)):
+            return base.Track.project(self, x, z)
+        w = (np.arange(-30, 90) + int(i0)) % self.n
+        px, pz = x - self.pts[w, 0], z - self.pts[w, 1]
+        d = self.d[w]
+        t = np.clip((px * d[:, 0] + pz * d[:, 1]) * self.inv_len2[w], 0, 1)
+        ex, ez = px - d[:, 0] * t, pz - d[:, 1] * t
+        e2 = ex * ex + ez * ez
+        k = int(np.argmin(e2))
+        if e2[k] > (3 * LIMIT) ** 2:                    # el coche aparecio en otro lado
+            return base.Track.project(self, x, z)
+        i = int(w[k])
+        nx, nz = self.nrm[i]
+        lat = ex[k] * nx + ez[k] * nz
+        cx, cz = self.pts[i, 0] + d[k, 0] * t[k], self.pts[i, 1] + d[k, 1] * t[k]
+        return float(self.cum[i] + t[k] * self.seg_len[i]), i, float(lat), cx, cz, nx, nz
 
 
 # ================================================================ constructor de escenario automatico
@@ -963,24 +1045,305 @@ def airport_hd(g, rnd, A1, d, lights, zones, track, openz=None):
     return flights, airliner_geo(rgb(10, 40, 110))
 
 
+# ---------------------------------------------------------------- fiesta mundialista (Chapultepec / Reforma)
+MEXICO_SHIRTS = [rgb(0, 104, 71), rgb(0, 104, 71), rgb(0, 120, 80), rgb(245, 245, 245), rgb(206, 17, 38),
+                 rgb(20, 20, 24), rgb(0, 90, 60)]
+FLAG_COLS = [(rgb(0, 104, 71), rgb(245, 245, 245), rgb(206, 17, 38)),      # Mexico
+             (rgb(0, 150, 60), rgb(250, 220, 0), rgb(0, 60, 160)),         # Brasil
+             (rgb(120, 180, 230), rgb(245, 245, 245), rgb(120, 180, 230)),  # Argentina
+             (rgb(200, 20, 40), rgb(245, 245, 245), rgb(200, 20, 40)),      # Canada
+             (rgb(20, 40, 120), rgb(245, 245, 245), rgb(200, 20, 40)),      # Estados Unidos / Francia
+             (rgb(200, 20, 30), rgb(250, 200, 0), rgb(200, 20, 30)),        # Espana
+             (rgb(20, 20, 20), rgb(220, 20, 20), rgb(250, 200, 0)),         # Alemania
+             (rgb(245, 245, 245), rgb(220, 20, 40), rgb(245, 245, 245))]    # Japon
+_PHI = (1 + 5 ** 0.5) / 2
+ICO = np.array([(-1, _PHI, 0), (1, _PHI, 0), (-1, -_PHI, 0), (1, -_PHI, 0), (0, -1, _PHI), (0, 1, _PHI),
+                (0, -1, -_PHI), (0, 1, -_PHI), (_PHI, 0, -1), (_PHI, 0, 1), (-_PHI, 0, -1), (-_PHI, 0, 1)], float)
+ICO /= np.linalg.norm(ICO, axis=1, keepdims=True)
+
+
+class PaletteCrowd(Crowd):
+    """Publico con playeras del tema del mapa (por ejemplo, la verde de Mexico)."""
+
+    def __init__(self, palette):
+        super().__init__()
+        self.pal = palette
+
+    def add(self, x, y, z, face_x, face_z, rnd, shirt=None, typ=None, concert=False, palette=None):
+        if self.pal and shirt is None and (palette is None or concert) and rnd.random() < 0.75:
+            palette = self.pal
+        super().add(x, y, z, face_x, face_z, rnd, shirt, typ, concert, palette)
+
+
+def balon_hd(g, x, y, z, r):
+    """Balon de futbol gigante (parches negros en los 12 vertices de un icosaedro)."""
+    c = np.array([x, y, z], float)
+
+    def colfn(P):
+        d = P - c
+        d /= np.maximum(np.linalg.norm(d, axis=-1, keepdims=True), 1e-6)
+        k = (d @ ICO.T).max(-1)
+        return np.where(k[..., None] > 0.9, np.array([0.03, 0.03, 0.035]), np.array([0.95, 0.95, 0.95])).astype(F4)
+    sphere(g, (x, y, z), r, (1, 1, 1), mat(M_DEF, 0.35), seg=28, rings=16, colfn=colfn)
+
+
+def trofeo_hd(g, x, z, s, lights=None):
+    """Copa dorada gigante."""
+    fbox(g, (x, z), (1, 0), 2.2 * s, 2.2 * s, 0, 1.8 * s, rgb(20, 110, 70), mat(M_DEF, 0.3, 0.1))
+    prof = [(1.6, 1.8), (1.2, 2.6), (0.75, 4.2), (0.9, 5.4), (1.6, 7.2), (2.2, 8.6), (2.4, 10.2), (1.9, 11.6),
+            (0.9, 12.3), (0.05, 12.6)]
+    revolve(g, [(a * s, b * s) for a, b in prof], (x, 0, z), (0, 1, 0), rgb(235, 185, 60), mat(hd.M_GOLD, 0.22, 1.0),
+            seg=20)
+    if lights is not None:
+        lights.append((float(x), 6.0 * s, float(z), 30.0 * s, 1.0, 0.85, 0.5, 3.0))
+
+
+def banderines_hd(g, pa, pb, h=8.0, rows=3, k0=0):
+    """Banderines de los paises sobre la calle (se mueven con el viento como el papel picado)."""
+    dx, dz = pb[0] - pa[0], pb[1] - pa[1]
+    ln = math.hypot(dx, dz)
+    ux, uz = dx / ln, dz / ln
+    nn = int(ln / 0.95)
+    for r in range(rows):
+        yb = h - r * 1.0
+        for i in range(nn):
+            t = (i + 0.5) / nn
+            px, pz = pa[0] + dx * t, pa[1] + dz * t
+            y = yb - 1.4 * 4 * t * (1 - t)
+            col = FLAG_COLS[(i // 3 + r + k0) % len(FLAG_COLS)][i % 3]
+            m_ = (float(hd.M_PAPEL), 0.7, 0.0, i * 0.7 + r)
+            quad(g, (px - ux * 0.36, y, pz - uz * 0.36), (px + ux * 0.36, y, pz + uz * 0.36), (px, y - 0.85, pz),
+                 (px, y - 0.85, pz), col, m_)
+
+
+def turbo_pad_hd(g, track, i):
+    """Rampa de turbo: flechas que brillan sobre el asfalto."""
+    p, t, nr = track.pts[i], track.tan[i], track.nrm[i]
+    for k in range(4):
+        a = k * 3.2
+        for sgn in (-1, 1):
+            tip = p + t * (a + 2.4)
+            end = p + t * a + nr * sgn * (HW - 1.2)
+            w = t * 0.9
+            P = [(end[0], 0.085, end[1]), (tip[0], 0.085, tip[1]), (tip[0] + w[0], 0.085, tip[1] + w[1]),
+                 (end[0] + w[0], 0.085, end[1] + w[1])]
+            quad_dir(g, *P, (0.15, 1.0, 0.55), mat(M_EMIS, 0.4, 0, 3.5), (0, 1, 0))
+
+
+def lift_crossings(geo, track):
+    """En un cruce las dos calles estan a la misma altura: la segunda se sube 3 cm para que no parpadee."""
+    keep = np.array([1, 4, 5, 6, M_LINE], float)          # asfalto, pianos, grava, orillas, lineas
+    for i, j, c in track.cross_pts:
+        sB = track.cum[j]
+        for p in geo.parts:
+            near = np.hypot(p[:, 0] - c[0], p[:, 2] - c[1]) < 80
+            if not near.any():
+                continue
+            ds = np.abs((p[:, 13] % track.L) - sB)
+            ds = np.minimum(ds, track.L - ds)
+            m = near & (p[:, 1] < 0.3) & np.isin(np.round(p[:, 9]), keep) & (ds < 110)
+            p[m, 1] += 0.03
+
+
+def monumento_rev_hd(g, track, i, lights):
+    """Monumento a la Revolucion: la pista pasa por debajo de sus cuatro arcos."""
+    p, t, nr = track.pts[i], track.tan[i], track.nrm[i]
+    H = LIMIT + 10.0
+    stone, dark = rgb(132, 124, 112), rgb(96, 90, 82)
+    ms = mat(M_CONC, 0.8)
+    for a in (-1, 1):
+        for b in (-1, 1):
+            c = p + t * a * (H - 4) + nr * b * (H - 4)
+            fbox(g, c, t, 5.0, 5.0, 0, 3.0, dark, ms)
+            fbox(g, c, t, 4.0, 4.0, 3.0, 26.0, stone, ms)
+            fbox(g, c, t, 1.2, 1.2, 32.0, 37.0, rgb(60, 60, 58), mat(M_METAL, 0.4, 0.6))  # esculturas
+    for f, o in ((t, nr), (nr, t)):
+        for sgn in (-1, 1):
+            c = p + o * sgn * (H - 4)
+            fbox(g, c, f, H, 4.0, 24.0, 32.0, stone, ms, bottom=True)
+            for k in range(14):                                                 # intrados del arco
+                u = -1 + (k + 0.5) / 14 * 2
+                yb = 13.0 + 11.0 * math.sqrt(max(0.0, 1 - u * u))
+                fbox(g, c + f * u * (H - 8), f, (H - 8) / 14 + 0.05, 3.6, yb, 24.0, stone, ms, bottom=True)
+    fbox(g, p, t, H, H, 32.0, 36.0, dark, ms, bottom=True)
+    fcyl(g, p[0], p[1], 36.0, 44.0, 15.0, stone, ms, seg=24, cap=False)
+    revolve(g, [(15.0, 44.0), (14.0, 50.0), (11.5, 55.0), (7.5, 59.0), (2.5, 61.0), (0.3, 61.3)], (p[0], 0, p[1]),
+            (0, 1, 0), rgb(70, 112, 96), mat(M_METAL, 0.45, 0.6), seg=24)
+    fcyl(g, p[0], p[1], 61.0, 66.0, 1.8, rgb(235, 185, 60), mat(hd.M_GOLD, 0.25, 1.0), seg=10)
+    sphere(g, (p[0], 67.0, p[1]), 1.3, rgb(235, 185, 60), mat(hd.M_GOLD, 0.25, 1.0), seg=10, rings=6)
+    for a in (-1, 1):
+        for b in (-1, 1):
+            c = p + t * a * (H + 3) + nr * b * (H + 3)
+            lights.append((float(c[0]), 10.0, float(c[1]), 60.0, 1.0, 0.8, 0.5, 4.0))
+    lights.append((float(p[0]), 20.0, float(p[1]), 45.0, 1.0, 0.85, 0.6, 3.0))
+
+
+def basilica_hd(g, crowd, rnd, c, f, lights):
+    """Basilica de Guadalupe: atrio, la basilica nueva (techo de cobre) y la antigua (amarilla)."""
+    f = v2(f)
+    r = np.array([-f[1], f[0]])
+    flat_rect(g, c, f, 95, 70, 0.04, rgb(196, 186, 168), mat(M_CONC, 0.8))
+    nb = c - f * 30 + r * 25
+    fcyl(g, nb[0], nb[1], 0, 10, 48, rgb(215, 205, 185), mat(M_CONC, 0.7), seg=32, cap=False)
+    revolve(g, [(50, 10), (42, 17), (30, 26), (16, 35), (4, 43), (0.5, 44.5)], (nb[0], 0, nb[1]), (0, 1, 0),
+            rgb(70, 135, 105), mat(M_METAL, 0.45, 0.6), seg=32)
+    fbox(g, nb + f * 52, f, 2.5, 2.5, 0, 46, rgb(225, 220, 210), mat(M_CONC, 0.7))           # campanario
+    fbox(g, nb + f * 52, f, 0.4, 3.0, 40, 41, rgb(235, 185, 60), mat(hd.M_GOLD, 0.3, 1.0))
+    ob = c - f * 30 - r * 45
+    fbox(g, ob, f, 24, 16, 0, 22, rgb(205, 170, 120), mat(M_CONC, 0.75))
+    for a in (-1, 1):
+        for b in (-1, 1):
+            q = ob + f * a * 22 + r * b * 14
+            fbox(g, q, f, 3.2, 3.2, 0, 34, rgb(210, 175, 125), mat(M_CONC, 0.75))
+            sphere(g, (q[0], 36.0, q[1]), 3.0, rgb(225, 185, 70), mat(M_METAL, 0.4, 0.5), seg=12, rings=6)
+    revolve(g, [(10, 22), (9.5, 28), (7.5, 33), (4, 36), (0.4, 37)], (ob[0], 0, ob[1]), (0, 1, 0), rgb(225, 185, 70),
+            mat(M_METAL, 0.4, 0.5), seg=20)
+    for _ in range(450):                                                       # peregrinos y aficionados
+        q = c + f * rnd.uniform(-10, 90) + r * rnd.uniform(-90, 90)
+        crowd.add(q[0], 0.04, q[1], rnd.uniform(-1, 1), rnd.uniform(-1, 1), rnd)
+    for k in range(4):
+        q = c + f * 40 + r * (k - 1.5) * 40
+        lights.append((float(q[0]), 12.0, float(q[1]), 60.0, 1.0, 0.85, 0.6, 3.0))
+
+
+def castillo_hd(g, rnd, c, r, lights):
+    """Cerro de Chapultepec con el castillo y una bandera monumental."""
+    h = 40.0
+    mountain_hd(g, c[0], c[1], r, h, rnd, seg=32, rings=10)
+    wall = rgb(228, 218, 198)
+    fbox(g, c, (1, 0), 40, 20, h * 0.55, h + 12, wall, mat(M_WINDOWS, 0.5, 0.05), bottom=True)
+    fbox(g, c, (1, 0), 41, 21, h + 12, h + 13.2, rgb(200, 190, 170), mat(M_CONC, 0.8))
+    fbox(g, c + (34, 0), (1, 0), 10, 24, h * 0.6, h + 8, wall, mat(M_WINDOWS, 0.5, 0.05), bottom=True)
+    t0 = c + (-18, -8)
+    fbox(g, t0, (1, 0), 5.5, 5.5, h, h + 26, wall, mat(M_WINDOWS, 0.5, 0.05))        # caballero alto
+    fbox(g, t0, (1, 0), 6.5, 6.5, h + 26, h + 28, rgb(200, 190, 170), mat(M_CONC, 0.8))
+    for k in range(10):                                                        # arboles del cerro
+        a = k / 10 * TAU
+        q = c + np.array([math.cos(a), math.sin(a)]) * r * 0.62
+        tree_hd(g, q[0], q[1], rnd.uniform(1.0, 1.5), rnd)
+    flagpole_hd(g, c[0] + 18, c[1] + 26, height=h + 45)
+    for a in (0.5, 2.6, 4.5):
+        q = c + np.array([math.cos(a), math.sin(a)]) * 60
+        lights.append((float(q[0]), h + 4, float(q[1]), 90.0, 1.0, 0.85, 0.6, 4.0))
+
+
+def museo_hd(g, c, f, lights):
+    """Museo Nacional de Antropologia con su 'paraguas'."""
+    f = v2(f)
+    stone, dark = rgb(205, 196, 178), rgb(92, 84, 74)
+    fbox(g, c, f, 80, 48, 0, 13, stone, mat(M_CONC, 0.75))
+    fbox(g, c, f, 80.5, 48.5, 9, 13, dark, mat(M_CONC, 0.7))
+    pc = c - f * 10
+    fcyl(g, pc[0], pc[1], 13, 23, 2.4, rgb(120, 110, 95), mat(M_CONC, 0.7), seg=14, cap=False)
+    fbox(g, pc, f, 42, 28, 23, 25, rgb(170, 160, 145), mat(M_CONC, 0.7), bottom=True)
+    tl = c - f * 56
+    fbox(g, tl, f, 1.6, 1.6, 0, 7.5, rgb(110, 108, 104), mat(M_CONC, 0.9))               # Tlaloc
+    lights.append((float(tl[0]), 6.0, float(tl[1]), 40.0, 1.0, 0.85, 0.6, 3.0))
+
+
+def fanfest_hd(g, gc, crowd, rnd, track, sc, r0, md, info, lights):
+    """Fan Fest mundialista: plaza, pantallas, escenario (de noche), copa y balon gigantes."""
+    ang = np.linspace(0, TAU, 65)
+    R = r0 + 8
+    for j in range(64):
+        quad(g, (sc[0], 0.03, sc[1]), (sc[0], 0.03, sc[1]),
+             (sc[0] + R * math.cos(ang[j + 1]), 0.03, sc[1] + R * math.sin(ang[j + 1])),
+             (sc[0] + R * math.cos(ang[j]), 0.03, sc[1] + R * math.sin(ang[j])), rgb(160, 155, 146), mat(M_CONC, 0.8))
+    i_n = int(np.argmin(np.hypot(track.pts[:, 0] - sc[0], track.pts[:, 1] - sc[1])))
+    tt = track.pts[i_n] - sc
+    tt = tt / np.linalg.norm(tt)
+    rr = np.array([-tt[1], tt[0]])
+    for k in range(48):                                                        # vallas
+        a = k / 48 * TAU
+        q = sc + np.array([math.cos(a), math.sin(a)]) * (r0 + 6)
+        fbox(g, q, (-math.sin(a), math.cos(a)), 3.4, 0.08, 0, 1.2, rgb(150, 155, 160), mat(M_METAL, 0.4, 0.7))
+    fe = sc + tt * (r0 + 7)                                                    # portico de entrada
+    for sgn in (-1, 1):
+        q = fe + rr * sgn * 16
+        fbox(g, q, tt, 1.0, 1.0, 0, 18, rgb(30, 30, 34), mat(M_METAL, 0.45, 0.7))
+    fbox(g, fe, rr, 17, 1.0, 16, 22, rgb(30, 30, 34), mat(M_METAL, 0.45, 0.7))
+    sign_quad(g, fe + tt * 1.05, tt, 15, 16.3, 21.7, md.band_sign)
+    sign_quad(g, fe - tt * 1.05, -tt, 15, 16.3, 21.7, 1)
+    for sgn in (-1, 1):                                                        # pantallas gigantes
+        q = sc + rr * sgn * (r0 - 6) + tt * 10
+        fbox(g, q, rr, 7, 0.6, 0, 16, rgb(25, 25, 28), mat(M_DEF, 0.5))
+        face_quad(g, q + tt * 0.65 - rr * 6.4, q + tt * 0.65 + rr * 6.4, 5.0, 15.4, (1, 1, 1),
+                  mat(M_LED, 0.3, 0, 2.5), tt, ((0, 0), (1, 0), (1, 1), (0, 1)))
+    tq, bq = sc + tt * (r0 - 14) - rr * 18, sc + tt * (r0 - 14) + rr * 18
+    trofeo_hd(g, tq[0], tq[1], 1.3, lights)
+    balon_hd(g, bq[0], 6.5, bq[1], 6.5)
+    for k in range(5):                                                         # torres de luz
+        a = math.atan2(tt[1], tt[0]) + (k + 0.5) / 5 * TAU
+        q = sc + np.array([math.cos(a), math.sin(a)]) * (r0 + 4)
+        fcyl(g, q[0], q[1], 0, 24, 0.45, rgb(140, 145, 150), mat(M_METAL, 0.4, 0.9), seg=8)
+        fbox(g, q, (-math.sin(a), math.cos(a)), 2.5, 0.5, 24, 26, (1.0, 0.95, 0.85), mat(M_LAMP, 0.4, 0, 7.0))
+        lights.append((float(q[0]), 20.0, float(q[1]), 60.0, 1.0, 0.92, 0.8, 3.5))
+    for _ in range(700):                                                       # aficionados (dia y noche)
+        a, rr_ = rnd.uniform(0, TAU), rnd.uniform(4, r0 + 4)
+        x, z = sc[0] + rr_ * math.cos(a), sc[1] + rr_ * math.sin(a)
+        crowd.add(x, 0.0, z, rnd.uniform(-1, 1), rnd.uniform(-1, 1), rnd)
+    if md.concert:
+        build_concert_hd(gc, crowd, rnd, track, sc, r0, r0 + 4, 10.0, info)
+    info["stadium"] = (sc, r0 + 4, r0)
+
+
+def torres_reforma_hd(g, rnd, track, i0, i1, count, zones, occ, lights):
+    """Rascacielos de Paseo de la Reforma a los lados del tramo [i0, i1]."""
+    placed = 0
+    for _ in range(count * 25):
+        if placed >= count:
+            break
+        i = rnd.randrange(i0, i1)
+        side = rnd.choice((-1, 1))
+        half = rnd.uniform(14, 22)
+        c = track.pts[i] + track.nrm[i] * side * (WALK + half + rnd.uniform(8, 60))
+        f = track.tan[i]
+        cells = occ.cells(c, f, half, half)
+        if track.nearest_dist(c[None])[0] < WALK + half * 1.45 or zones.hit(c).any() or not occ.free(cells):
+            continue
+        h = rnd.uniform(120, 245)
+        fbox(g, c, f, half, half, 0, h, rnd.choice([rgb(90, 115, 140), rgb(70, 95, 120), rgb(120, 140, 160)]),
+             mat(M_WINDOWS, 0.15, 0.5))
+        fbox(g, c, f, half * 0.6, half * 0.6, h, h + 8, rgb(60, 70, 80), mat(M_METAL, 0.4, 0.6))
+        box(g, c[0] - 0.8, h + 8, c[1] - 0.8, c[0] + 0.8, h + 18, c[1] + 0.8, (1.0, 0.1, 0.05), mat(M_EMIS, 0.5, 0, 8.0))
+        occ.add(cells)
+        placed += 1
+
+
 def build_world_streets(track, md):
     """Circuito callejero CDMX: calles, banquetas, edificios, puentes peatonales, semaforos y mucho publico."""
     rnd = random.Random(sum(map(ord, md.key)) * 104729)
-    g, gc, crowd, lights, info = Geo(), Geo(), Crowd(), [], {}
+    g, gc, lights, info = Geo(), Geo(), [], {}
+    crowd = PaletteCrowd(MEXICO_SHIRTS if md.palette == "mexico" else md.palette) if md.palette else Crowd()
     pts, nrm, tan, n = track.pts, track.nrm, track.tan, track.n
     cxm, czm = track.center
     occ, zones = Occupancy(), Zones()
     openz = Zones()                          # explanadas abiertas (sin edificios) frente a los lugares
+    noveg = Zones()                          # donde no van arboles del parque
+    # monumentos que pasan sobre la pista: buscar el tramo mas recto cerca del punto indicado
+    over = {}
+    for lm in md.landmarks:
+        if lm[0] == "monumento":
+            pos = md.w(lm[1])
+            i_h = int(np.argmin(np.hypot(pts[:, 0] - pos[0], pts[:, 1] - pos[1])))
+            cands = [(i_h + q) % n for q in range(-40, 41)]
+            over["monumento"] = min(cands, key=lambda i: (np.max(np.abs(track.curv[[(i + k) % n for k in range(-12, 13)]])),
+                                                          abs(i - i_h)))
+    avoid = [(0, 30)] + [(i, 28) for i in over.values()] + [(a, 30) for a, b, _ in track.cross_pts] + \
+        [(b, 30) for a, b, _ in track.cross_pts]
     G = 6500
     xs = np.linspace(cxm - G, cxm + G, 41)
     zs = np.linspace(czm - G, czm + G, 41)
     X, Z = np.meshgrid(xs, zs, indexing="ij")
     grid(g, np.stack([X, np.zeros_like(X), Z], -1), rgb(112, 112, 108), mat(M_CONC, 0.85), orient=(0, 1, 0))
     # ---- lugares reservados: salida, puentes peatonales e intersecciones
-    bridges = pick_spots(track, md.ped_bridges, [(0, 30)], 40, 1 / 400, LIMIT + 19, offset=0.5) if md.ped_bridges else []
-    cross = pick_spots(track, 16, [(0, 30)] + [(b, 14) for b in bridges], 30, 1 / 300, LIMIT + 2, offset=0.0)
+    bridges = pick_spots(track, md.ped_bridges, avoid, 40, 1 / 400, LIMIT + 19, offset=0.5) if md.ped_bridges else []
+    ncross = max(16, int(track.L / 430))
+    cross = pick_spots(track, ncross, avoid + [(b, 14) for b in bridges], 30, 1 / 300, LIMIT + 2, offset=0.0)
     reserved = [(pts[i][0], pts[i][1], LIMIT + 22) for i in bridges] + [(pts[i][0], pts[i][1], LIMIT + 12)
                                                                          for i in cross]
+    reserved += [(pts[i][0], pts[i][1], LIMIT + 34) for i in over.values()]
+    reserved += [(c[0], c[1], LIMIT + 30) for _, _, c in track.cross_pts]
     res = np.array(reserved, float).reshape(-1, 3)
 
     def is_reserved(x, z, extra=0.0):
@@ -995,10 +1358,23 @@ def build_world_streets(track, md):
         if not is_reserved(cx, cz, 6.0):
             o_bb(g_, cx, cz, fx, fz, width, y0, y1, k, lights_)
     hd.light_tower, hd.billboard_hd = lamp, bboard
+    gt = Geo()
     try:
-        build_track_hd(g, track, info, lights)
+        build_track_hd(gt, track, info, lights)
     finally:
         hd.light_tower, hd.billboard_hd = o_tower, o_bb
+    lift_crossings(gt, track)
+    g.merge(gt)
+    if "monumento" in over:
+        monumento_rev_hd(g, track, over["monumento"], lights)
+        i = over["monumento"]
+        occ.rect(pts[i], tan[i], LIMIT + 14, LIMIT + 14)
+    for a, b, c in track.cross_pts:                                            # gran cruce con semaforos
+        for k in (a, b):
+            for side in (-1, 1):
+                sb = pts[k] - tan[k] * (LIMIT + 10) * side + nrm[k] * side * (LIMIT + 1.3)
+                semaforo_hd(g, sb, -nrm[k] * side, LIMIT + 1.3 - 3.0, -tan[k] * side)
+        occ.rect(c, (1, 0), LIMIT + 24, LIMIT + 24)
     near_cross = np.zeros(n, bool)
     for i in cross:
         near_cross[[(i + q) % n for q in range(-3, 4)]] = True
@@ -1016,7 +1392,15 @@ def build_world_streets(track, md):
             occ.rect(occ_pts[k], tan[k], 3.5, 3.6)
     # ---- estadio del concierto (al lado de la pista)
     keep_info = None
-    if md.venue:
+    if md.venue and md.venue.get("kind") == "fanfest":
+        v = md.venue
+        r0 = float(v.get("r0", 55))
+        sc = beside_track(track, md.w(v["pos"]), r0 + 8 + LIMIT + 10)
+        fanfest_hd(g, gc, crowd, rnd, track, sc, r0, md, info, lights)
+        zones.circle(sc, r0 + 9)
+        openz.circle(sc, float(track.nearest_dist(sc[None])[0]) - LIMIT - 1)
+        keep_info = (sc, r0 + 8)
+    elif md.venue:
         v = md.venue
         r0, rows = float(v.get("r0", 62)), int(v.get("rows", 26))
         rmax_est = r0 + rows * 1.0
@@ -1069,8 +1453,67 @@ def build_world_streets(track, md):
     # ---- lugares del paisaje
     planes = None
     for lm in md.landmarks:
-        kind, pos = lm[0], md.w(lm[1])
-        if kind == "gnp":
+        kind = lm[0]
+        pos = md.w(lm[1]) if kind not in ("torres", "parque") else None
+        if kind == "monumento":
+            continue                                                           # ya se construyo sobre la pista
+        if kind == "angel":                                                    # glorieta con festejo
+            c = beside_track(track, pos, LIMIT + 22)
+            for j in range(48):
+                a0, a1 = j / 48 * TAU, (j + 1) / 48 * TAU
+                quad(g, (c[0], 0.05, c[1]), (c[0], 0.05, c[1]), (c[0] + 20 * math.cos(a1), 0.05, c[1] + 20 * math.sin(a1)),
+                     (c[0] + 20 * math.cos(a0), 0.05, c[1] + 20 * math.sin(a0)), rgb(175, 170, 160), mat(M_CONC, 0.8))
+            angel_hd(g, c[0], c[1], lights)
+            info["angel"] = c
+            for _ in range(450):
+                a, rr = rnd.uniform(0, TAU), rnd.uniform(9, 40)
+                x, z = c[0] + rr * math.cos(a), c[1] + rr * math.sin(a)
+                if track.nearest_dist(np.array([[x, z]]))[0] > LIMIT + 1.5:
+                    crowd.add(x, 0.1, z, c[0] - x, c[1] - z, rnd)
+            zones.circle(c, 22)
+            openz.circle(c, 45)
+            noveg.circle(c, 45)
+        elif kind == "basilica":
+            c = beside_track(track, pos, LIMIT + 110)
+            i_n = int(np.argmin(np.hypot(pts[:, 0] - c[0], pts[:, 1] - c[1])))
+            f = c - pts[i_n]
+            basilica_hd(g, crowd, rnd, c, f / np.linalg.norm(f), lights)
+            zones.circle(c, 100)
+            openz.circle(c, float(track.nearest_dist(c[None])[0]) - LIMIT - 1)
+        elif kind == "castillo":
+            c = v2(pos)
+            r = float(track.nearest_dist(c[None])[0]) - LIMIT - 14
+            castillo_hd(g, rnd, c, r, lights)
+            zones.circle(c, r)
+            noveg.circle(c, r * 0.75)
+        elif kind == "museo":
+            hl, hw = 80.0, 48.0
+            c = beside_track(track, pos, hw + LIMIT + 22)
+            i_n = int(np.argmin(np.hypot(pts[:, 0] - c[0], pts[:, 1] - c[1])))
+            museo_hd(g, c, tan[i_n], lights)
+            zones.rect(c, tan[i_n], hl + 3, hw + 3)
+            noveg.rect(c, tan[i_n], hl + 14, hw + 14)
+            bq = pts[i_n] + nrm[i_n] * np.sign(np.dot(c - pts[i_n], nrm[i_n])) * (WALK + 10)
+            balon_hd(g, bq[0], 9.0, bq[1], 9.0)                               # balon gigante en la salida
+            occ.rect(bq, (1, 0), 10, 10)
+        elif kind == "lago":
+            c, half = v2(pos), lm[2]
+            flat_rect(g, c, (1, 0), half[0], half[1], 0.06, rgb(32, 58, 78), mat(M_DEF, 0.05, 0.3))
+            for k in range(8):                                                 # lanchas de pedales
+                q = c + np.array([rnd.uniform(-half[0] * 0.8, half[0] * 0.8), rnd.uniform(-half[1] * 0.7, half[1] * 0.7)])
+                fbox(g, q, (1, 0), 1.4, 0.8, 0.0, 0.7, rnd.choice(LONAS), mat(M_PAINT, 0.4))
+            zones.rect(c, (1, 0), half[0], half[1])
+            noveg.rect(c, (1, 0), half[0] + 4, half[1] + 4)
+        elif kind == "parque":                                                 # bosque de Chapultepec
+            (x0, z0), (x1, z1) = md.w(lm[1][0]), md.w(lm[1][1])
+            cc, hh = np.array([(x0 + x1) / 2, (z0 + z1) / 2]), (abs(x1 - x0) / 2, abs(z1 - z0) / 2)
+            flat_rect(g, cc, (1, 0), hh[0], hh[1], 0.02, rgb(70, 115, 45), mat(M_GRASS, 0.95))
+            openz.rect(cc, (1, 0), hh[0], hh[1])
+            info["park"] = (cc, hh, lm[2] if len(lm) > 2 else 700)
+        elif kind == "torres":
+            f0, f1 = lm[1]
+            info["torres"] = (int(f0 * n), int(f1 * n), lm[2] if len(lm) > 2 else 8)
+        elif kind == "gnp":
             r0, rows = 95.0, 34
             sc = beside_track(track, pos, r0 + rows + LIMIT + 60)
             ang = np.linspace(0, TAU, 65)
@@ -1198,6 +1641,24 @@ def build_world_streets(track, md):
         for frac in (0.04, 0.15, 0.31, 0.5, 0.58, 0.74, 0.86, 0.95):
             i = int(frac * n)
             papel_picado_hd(g, pts[i] + nrm[i] * -(HW + 2.5), pts[i] + nrm[i] * (HW + 2.5))
+    if "banderines" in md.extras:                                              # banderines del mundial
+        for k, i in enumerate(range(40, n, 55)):
+            if any(min(abs(i - a), n - abs(i - a)) < 15 for a, _ in avoid[1:]):
+                continue
+            banderines_hd(g, pts[i] + nrm[i] * -(HW + 2.5), pts[i] + nrm[i] * (HW + 2.5), k0=k)
+    if "torres" in info:
+        i0, i1, cnt = info.pop("torres")
+        torres_reforma_hd(g, rnd, track, i0, i1, cnt, zones, occ, lights)
+    if md.pads:                                                                # rampas de turbo en las rectas
+        pads = []
+        for i0, ln in straight_runs(track, max_curv=1 / 1200, min_len=260):
+            for k in range(int(25 / track.spacing), ln - int(60 / track.spacing), int(380 / track.spacing)):
+                i = (i0 + k) % n
+                if len(pads) < md.pads and not any(min(abs(i - a), n - abs(i - a)) < 25 for a, _ in avoid):
+                    pads.append(i)
+        for i in pads:
+            turbo_pad_hd(g, track, i)
+        info["pads"] = np.array(sorted(pads), int)
     # ---- edificios con locales frente a la calle
     for side in (-1, 1):
         s = 0.0
@@ -1215,6 +1676,8 @@ def build_world_streets(track, md):
                 h = rnd.choice(STORIES) * 3.6 + 0.4
                 building_hd(g, crowd, rnd, c, f, o, w / 2, dp / 2, h, rnd.choice(FACADES),
                             shop=rnd.random() < 0.85, roof_fans=h < 20 and rnd.random() < 0.12)
+                if "balones" in md.extras and h < 25 and rnd.random() < 0.05:
+                    balon_hd(g, c[0], h + 3.0, c[1], 3.0)
                 occ.add(cells)
                 s += w + rnd.uniform(0.0, 1.0)
             else:
@@ -1233,8 +1696,9 @@ def build_world_streets(track, md):
             elif r_ < 0.3:
                 puesto_hd(g, pts[i] + nrm[i] * side * (WALK - 1.6), tan[i], rnd)
     # ---- resto de la ciudad (manzanas)
-    lo, hi = pts.min(axis=0) - 750, pts.max(axis=0) + 750
-    gx, gz = np.meshgrid(np.arange(lo[0], hi[0], 34.0), np.arange(lo[1], hi[1], 34.0), indexing="ij")
+    lo, hi = pts.min(axis=0) - md.city_margin, pts.max(axis=0) + md.city_margin
+    st_ = md.city_step
+    gx, gz = np.meshgrid(np.arange(lo[0], hi[0], st_), np.arange(lo[1], hi[1], st_), indexing="ij")
     C = np.column_stack([gx.ravel(), gz.ravel()]) + np.array([[rnd.uniform(-6, 6), rnd.uniform(-6, 6)]])
     D = track.nearest_dist(C)
     blocked = zones.hit(C) | openz.hit(C)
@@ -1242,7 +1706,7 @@ def build_world_streets(track, md):
     for c, dist, bl in zip(C, D, blocked):
         if bl or dist < WALK + 26:
             continue
-        w, dp = rnd.uniform(9, 16), rnd.uniform(9, 16)
+        w, dp = rnd.uniform(9, 16) * st_ / 34, rnd.uniform(9, 16) * st_ / 34
         f = np.array([math.cos(yaw0), math.sin(yaw0)])
         cells = occ.cells(c, f, w, dp)
         if not occ.free(cells):
@@ -1251,11 +1715,26 @@ def build_world_streets(track, md):
         tall = rnd.random() < (0.05 if dist > 300 else 0.015)
         h = rnd.uniform(40, 110) if tall else rnd.choice(STORIES) * 3.6 + 0.4
         building_hd(g, crowd, rnd, c, f, np.array([-f[1], f[0]]), w, dp, h, rnd.choice(FACADES),
-                    shop=False, roof_fans=False) if dist < 400 else \
+                    shop=False, roof_fans=False) if dist < md.detail_dist else \
             frame_box(g, c, f, (w, dp), rnd.choice(FACADES), mat(M_WINDOWS, 0.5, 0.05), 0, h)
         if tall:
             box(g, c[0] - 0.8, h, c[1] - 0.8, c[0] + 0.8, h + 5, c[1] + 0.8, (1.0, 0.1, 0.05), mat(M_EMIS, 0.5, 0, 6.0))
-    span = float(np.max(pts.max(axis=0) - pts.min(axis=0))) / 2 + 750
+    if "park" in info:                                                         # bosque de Chapultepec
+        cc, hh, cnt = info.pop("park")
+        TP = cc + np.column_stack([np.array([rnd.uniform(-hh[0], hh[0]) for _ in range(cnt * 3)]),
+                                   np.array([rnd.uniform(-hh[1], hh[1]) for _ in range(cnt * 3)])])
+        okd = (track.nearest_dist(TP) > LIMIT + 9) & ~noveg.hit(TP) & ~zones.hit(TP)
+        placed_t = 0
+        for (x, z), ok_ in zip(TP, okd):
+            if placed_t >= cnt:
+                break
+            if ok_ and occ.free(occ.cells((x, z), (1, 0), 2, 2)):
+                if rnd.random() < 0.2:
+                    jacaranda_hd(g, x, z, rnd.uniform(1.0, 1.4), rnd)
+                else:
+                    tree_hd(g, x, z, rnd.uniform(1.0, 1.7), rnd)
+                placed_t += 1
+    span = float(np.max(pts.max(axis=0) - pts.min(axis=0))) / 2 + md.city_margin
     for _ in range(260):                                                       # horizonte
         a = rnd.uniform(0, TAU)
         r = rnd.uniform(span + 300, span + 1800)
@@ -1559,6 +2038,36 @@ class GameMaps(hd.GameHD):
                     self.net.last_rx = time.time()
                 return
         super().update(rdt)
+        self.map_extras(rdt)
+
+    def map_extras(self, rdt):
+        """Fuegos artificiales por toda la ruta (noche) y rampas de turbo."""
+        md = self.md
+        if md.fireworks and self.tod == 2 and self.fx.concert and \
+                self.state in ("menu", "intro", "countdown", "race", "finished"):
+            self._fw = getattr(self, "_fw", 0.0) - rdt
+            if self._fw <= 0:
+                self._fw = random.uniform(0.1, 0.3)
+                ref = self.player if self.state != "menu" else self.cars[getattr(self, "tv_target", 0) % len(self.cars)]
+                x, z, dx, dz = self.track.point(ref.s + random.uniform(-80, 500))
+                side, off = random.choice((-1, 1)), LIMIT + random.uniform(12, 120)
+                self.fx.spawn((x - dz * side * off, 1.0, z + dx * side * off),
+                              [random.gauss(0, 4), random.uniform(30, 46), random.gauss(0, 4)], [3.0, 2.2, 1.2], 3.5,
+                              1.4, 1)
+        pads = self.info.get("pads")
+        if pads is not None and len(pads) and self.state == "race":
+            n = self.track.n
+            for c in self.cars:
+                if getattr(c, "remote", False):
+                    continue
+                hit = pads[(c.idx - pads) % n < 4]
+                if len(hit) and abs(c.lat) < HW and getattr(c, "_pad", -1) != int(hit[0]):
+                    c._pad = int(hit[0])
+                    c.nitro = min(1.0, c.nitro + 0.5)
+                    c.vx += math.cos(c.ang) * 7.0           # empujon hacia adelante
+                    c.vz += math.sin(c.ang) * 7.0
+                    if c.is_player:
+                        self.show("¡TURBO!", 0.9)
 
     def build_intro(self):
         super().build_intro()
@@ -1589,7 +2098,7 @@ class GameMaps(hd.GameHD):
         self.txt("PISTA", 16, (170, 185, 200), (x + 40, y + 10), italic=False)
         arrows = len(MAPS) > 1 and can_change
         self.txt(f"‹ {m.name} ›" if arrows else m.name, 30, (255, 255, 255), (x + 40, y + 28))
-        km = f"{m.length / 1000:.1f} KM  ·  {m.laps} VUELTAS" if m.length else f"{m.laps} VUELTAS"
+        km = f"{m.length / 1000:.1f} KM  ·  {m.laps} VUELTA{'S' if m.laps != 1 else ''}" if m.length else f"{m.laps} VUELTAS"
         self.txt(f"{km}  ·  {m.subtitle}", 15, (200, 210, 225), (x + 42, y + 72), italic=False)
         if can_change:
             self.txt(f"Q / E  cambiar pista  ({self.map_sel + 1}/{len(MAPS)})", 14, ORANGE, (x + 500, y + 10), "topright",
@@ -1614,7 +2123,7 @@ class GameMaps(hd.GameHD):
             pygame.draw.rect(h, (0, 0, 0, 255), (0, WIN_H - bars, WIN_W, bars))
             a = int(255 * smooth((lt - 0.6) / 0.8))
             self.txt(md.name, 92, (255, 255, 255), (WIN_W // 2, WIN_H // 2 + 120), "center", glow=ACCENT, alpha=a)
-            self.txt(f"{self.track.L / 1000:.1f} KM  ·  {md.laps} VUELTAS  ·  {DIFFS[self.diff][0]}  ·  "
+            self.txt(f"{self.track.L / 1000:.1f} KM  ·  {md.laps} VUELTA{'S' if md.laps != 1 else ''}  ·  {DIFFS[self.diff][0]}  ·  "
                      f"{TOD_HD[self.tod][0]}", 26, ACCENT, (WIN_W // 2, WIN_H // 2 + 190), "center", alpha=a)
             self.txt("ENTER  saltar", 17, (190, 200, 215), (WIN_W - 24, WIN_H - 34), "topright", italic=False)
             self.song_banner(24)
@@ -1627,8 +2136,11 @@ class GameMaps(hd.GameHD):
             pygame.draw.rect(h, (0, 0, 0, 255), (0, WIN_H - bars, WIN_W, bars))
             a = int(255 * smooth((lt - 0.3) / 0.6))
             self.txt(md.venue_name, 30, (255, 255, 255), (WIN_W // 2, WIN_H // 2 + 150), "center", alpha=a)
-            self.txt(f"{md.band}  ·  EN VIVO", 70, (255, 70, 50), (WIN_W // 2, WIN_H // 2 + 205), "center",
-                     glow=(255, 30, 0), alpha=a)
+            s = f"{md.band}  ·  {md.venue_tag}"
+            size = 70
+            while size > 36 and font(size).size(s)[0] > WIN_W - 80:
+                size -= 4
+            self.txt(s, size, (255, 70, 50), (WIN_W // 2, WIN_H // 2 + 205), "center", glow=(255, 30, 0), alpha=a)
             self.txt("ENTER  saltar", 17, (190, 200, 215), (WIN_W - 24, WIN_H - 34), "topright", italic=False)
             self.song_banner(24)
             return
