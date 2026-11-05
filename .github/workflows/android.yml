@@ -1,0 +1,53 @@
+name: APK Android
+
+on:
+  push:
+    branches: [main, android-apk]
+    paths:
+      - "gtc_racing.py"
+      - "android/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+jobs:
+  doom:
+    name: GTC Racing (version Doom)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Dependencias del sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git zip unzip openjdk-17-jdk autoconf libtool pkg-config \
+            zlib1g-dev libncurses5-dev libncursesw5-dev cmake libffi-dev libssl-dev automake
+
+      - name: Instalar Buildozer
+        run: pip install --upgrade "buildozer==1.5.0" "cython==0.29.36" setuptools
+
+      - name: Cache de Buildozer (SDK/NDK)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.buildozer
+            android/doom/.buildozer
+          key: buildozer-doom-${{ hashFiles('android/doom/buildozer.spec') }}
+
+      - name: Copiar el juego
+        run: cp gtc_racing.py android/doom/
+
+      - name: Compilar APK
+        working-directory: android/doom
+        run: yes | buildozer -v android debug
+
+      - name: Subir APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: GTC-Racing-Doom-APK
+          path: android/doom/bin/*.apk
+          if-no-files-found: error
