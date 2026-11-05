@@ -19,11 +19,14 @@ Controles:
   R              : reiniciar carrera
   ESC            : volver al menu / salir
 """
+import json
 import math
 import os
 import random
 import re
+import socket
 import sys
+import time
 import wave
 
 import numpy as np
@@ -3157,6 +3160,143 @@ class MusicHD:
         self.apply_volume()
 
 
+# ---------------------------------------------------------------- multijugador en red local (LAN)
+GAME_PORT = 47777        # partida (UDP)
+DISC_PORT = 47778        # anuncios del anfitrion para que el invitado lo encuentre (UDP broadcast)
+NET_RATE = 1 / 30        # envios por segundo
+
+
+def local_ip():
+    """IP de esta computadora en la red local (no envia nada a internet)."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("10.255.255.255", 1))
+        return s.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+    finally:
+        s.close()
+
+
+class Net:
+    """Conexion UDP entre anfitrion e invitado (mensajes JSON pequenos)."""
+
+    def __init__(self, role, host_ip=None):
+        self.role = role
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        if role == "host":
+            self.sock.bind(("", GAME_PORT))
+            self.peer = None
+        else:
+            self.sock.bind(("", 0))
+            self.peer = (host_ip, GAME_PORT)
+        self.sock.setblocking(False)
+        self.ip = local_ip()
+        self.last_rx = 0.0
+        self.send_t = 0.0
+        self.beacon_t = 0.0
+        self.name = socket.gethostname()[:20]
+
+    def send(self, obj, addr=None):
+        addr = addr or self.peer
+        if addr is None:
+            return
+        try:
+            self.sock.sendto(json.dumps(obj, separators=(",", ":")).encode(), addr)
+        except OSError:
+            pass
+
+    def beacon(self):
+        msg = json.dumps({"t": "b", "name": self.name, "port": GAME_PORT}).encode()
+        for dst in ("<broadcast>", "255.255.255.255"):
+            try:
+                self.sock.sendto(msg, (dst, DISC_PORT))
+            except OSError:
+                pass
+
+    def recv_all(self):
+        out = []
+        while True:
+            try:
+                data, addr = self.sock.recvfrom(65536)
+            except (BlockingIOError, InterruptedError):
+                break
+            except OSError:
+                break
+            try:
+                out.append((json.loads(data.decode()), addr))
+            except ValueError:
+                continue
+        if out:
+            self.last_rx = time.time()
+        return out
+
+    def connected(self, timeout=3.0):
+        return time.time() - self.last_rx < timeout
+
+    def close(self):
+        try:
+            self.sock.close()
+        except OSError:
+            pass
+
+
+class Discovery:
+    """El invitado escucha los anuncios de las partidas en su red."""
+
+    def __init__(self):
+        self.hosts = {}
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            self.sock.bind(("", DISC_PORT))
+            self.ok = True
+        except OSError:
+            self.ok = False
+        self.sock.setblocking(False)
+
+    def poll(self):
+        while self.ok:
+            try:
+                data, addr = self.sock.recvfrom(4096)
+            except (BlockingIOError, InterruptedError, OSError):
+                break
+            try:
+                msg = json.loads(data.decode())
+            except ValueError:
+                continue
+            if msg.get("t") == "b":
+                self.hosts[addr[0]] = (msg.get("name", "?"), time.time())
+        now = time.time()
+        self.hosts = {ip: v for ip, v in self.hosts.items() if now - v[1] < 4}
+        return sorted(self.hosts.items())
+
+    def close(self):
+        try:
+            self.sock.close()
+        except OSError:
+            pass
+
+
+def pack_car(c):
+    flags = (1 if c.braking else 0) | (2 if c.boosting else 0) | (4 if c.drifting else 0)
+    return [c.slot, round(c.x, 3), round(c.z, 3), round(c.ang, 4), round(c.vx, 3), round(c.vz, 3), round(c.steer, 3),
+            flags, round(c.nitro, 3), round(c.u, 2), c.lap_idx, 1 if c.finished else 0,
+            round(c.finish_time, 3) if c.finished else -1, round(c.roll, 4), round(c.pitch, 4),
+            round(c.best_lap, 3) if c.best_lap else -1]
+
+
+def unpack_car(c, a):
+    c.net = dict(x=a[1], z=a[2], ang=a[3], vx=a[4], vz=a[5], t=time.perf_counter())
+    c.steer, c.nitro, c.u, c.lap_idx = a[6], a[8], a[9], a[10]
+    c.braking, c.boosting, c.drifting = bool(a[7] & 1), bool(a[7] & 2), bool(a[7] & 4)
+    if a[11] and not c.finished:
+        c.finished, c.finish_time = True, a[12]
+    c.roll, c.pitch = a[13], a[14]
+    c.best_lap = a[15] if a[15] >= 0 else None
+
+
 # ---------------------------------------------------------------- juego HD
 _FONTS = {}
 
@@ -3250,6 +3390,15 @@ class GameHD:
         self.tv_t = 0.0
         self.tv_target = 0
         self.mm_cache = None
+        self.net = None          # conexion LAN activa
+        self.disc = None         # busqueda de partidas (invitado)
+        self.mp = None           # None, "host" o "guest"
+        self.rid = 0             # numero de carrera multijugador
+        self.order = None
+        self.peer_pilot = None
+        self.browse_sel = 0
+        self.ip_typed = ""
+        self.lost_t = 0.0
         self.new_race(attract=True)
         self.loading("¡Listo!", 1.0)
 
@@ -3317,7 +3466,7 @@ class GameHD:
     def tod_params(self):
         d = dict(TOD_HD[self.tod][1])
         d["sun_n"] = tuple(map(float, norm(d["sun"])))
-        if self.state == "select":
+        if self.state in ("select", "lobby"):
             d.update(sun_n=(0.2, 0.95, 0.25), sun_col=(0.6, 0.6, 0.7), sky_top=(0.02, 0.022, 0.035),
                      sky_hor=(0.03, 0.035, 0.05), ground=(0.01, 0.01, 0.014), fog_den=0.0, wet=0.0, lamps=1.0,
                      shadows=0.0, exposure=0.8, night=0.0)
@@ -3362,6 +3511,229 @@ class GameHD:
         if not attract and self.tod == 2 and self.music.mode == "playlist":
             self.music.next_song()
 
+    # ------------------------------------------------------------ multijugador LAN
+    def start_host(self):
+        self.leave_mp(silent=True)
+        try:
+            self.net = Net("host")
+        except OSError:
+            self.toast, self.toast_t = "NO SE PUDO ABRIR EL PUERTO 47777", 3.0
+            self.net = None
+            return
+        self.mp = "host"
+        self.peer_pilot = None
+        self.state = "lobby"
+        self.fade = 0.0
+
+    def start_browse(self):
+        self.leave_mp(silent=True)
+        self.disc = Discovery()
+        self.browse_sel = 0
+        self.ip_typed = ""
+        self.state = "browse"
+
+    def join(self, ip):
+        try:
+            self.net = Net("guest", ip)
+        except OSError:
+            self.toast, self.toast_t = "NO SE PUDO CONECTAR", 3.0
+            return
+        self.mp = "guest"
+        self.peer_pilot = None
+        self.join_t = time.time()
+        if self.disc:
+            self.disc.close()
+            self.disc = None
+        self.toast, self.toast_t = f"CONECTANDO CON {ip}...", 3.0
+
+    def leave_mp(self, silent=False, msg=None):
+        if self.net:
+            self.net.close()
+        if self.disc:
+            self.disc.close()
+        self.net = self.disc = None
+        was = self.mp
+        self.mp = None
+        self.order = None
+        if was and not silent:
+            self.new_race(attract=True)
+            if msg:
+                self.toast, self.toast_t = msg, 3.5
+
+    def start_mp_race(self):
+        """El anfitrion arma la parrilla: 4 bots + los dos jugadores, y avisa al invitado."""
+        g_pi = self.peer_pilot if self.peer_pilot is not None else 0
+        free = [i for i in range(len(PILOTS)) if i not in (self.sel, g_pi)]
+        random.shuffle(free)
+        bots = free[:4]
+        while len(bots) < 4:
+            bots.append(random.randrange(len(PILOTS)))
+        order = [[bots[0], "b"], [bots[1], "b"], [self.sel, "h"], [g_pi, "g"], [bots[2], "b"], [bots[3], "b"]]
+        self.rid += 1
+        self.new_race_mp(order)
+
+    def new_race_mp(self, order):
+        self.order = order
+        self.state = "countdown"
+        self.countdown, self.last_count = 3.99, 4
+        self.race_time = 0.0
+        self.message, self.msg_t = "", 0.0
+        self.results_t = 0.0
+        self.go_t = -10.0
+        self.takedowns = 0
+        self.lost_t = 0.0
+        _, skill, corner, _, _, brake_f = DIFFS[self.diff]
+        tr = self.track
+        self.cars = []
+        for slot, (pi, owner) in enumerate(order):
+            pilot = PILOTS[pi]
+            s = tr.L - 10 - (slot // 2) * 12
+            x, z, dx, dz = tr.point(s)
+            off = -3.3 if slot % 2 == 0 else 3.3
+            x += -dz * off
+            z += dx * off
+            mine = (owner == "h" and self.mp == "host") or (owner == "g" and self.mp == "guest")
+            car = HDCar(pilot, x, z, math.atan2(dz, dx), tr, skill, corner, off * 0.5, mine, slot, brake_f)
+            car.vis = self.vehicles[pilot["name"]]
+            car.wheel_r = car.vis["info"]["radius"]
+            car.owner = owner
+            car.remote = (self.mp == "host" and owner == "g") or (self.mp == "guest" and owner in ("h", "b"))
+            car.net = None
+            if owner == "h":
+                car.name = pilot["name"] + " · J1"
+            elif owner == "g":
+                car.name = pilot["name"] + " · J2"
+            self.cars.append(car)
+            if mine:
+                self.player = car
+        self.cam_yaw = self.player.ang
+        self.cam_pos = None
+        self.fade = 0.0
+        self.update_camera(0.0)
+        if self.tod == 2 and self.music.mode == "playlist":
+            self.music.next_song()
+
+    def car_by_slot(self, slot):
+        for c in self.cars:
+            if c.slot == slot:
+                return c
+        return None
+
+    def lead_human_u(self):
+        humans = [c for c in self.cars if getattr(c, "owner", "") in ("h", "g")] or [self.player]
+        return max(c.u for c in humans)
+
+    def remote_follow(self, car, dt):
+        """Mueve un coche remoto hacia su ultima posicion recibida (con prediccion por su velocidad)."""
+        st = car.net
+        if st is None:
+            return
+        age = min(0.25, time.perf_counter() - st["t"])
+        tx, tz = st["x"] + st["vx"] * age, st["z"] + st["vz"] * age
+        if math.hypot(tx - car.x, tz - car.z) > 15:
+            car.x, car.z, car.ang = tx, tz, st["ang"]
+        k = min(1.0, dt * 14)
+        car.x += (tx - car.x) * k
+        car.z += (tz - car.z) * k
+        car.ang = (car.ang + wrap_angle(st["ang"] - car.ang) * k) % TAU
+        car.vx, car.vz = st["vx"], st["vz"]
+        car.wheel_rot = (car.wheel_rot + car.vf * dt / car.wheel_r) % TAU
+
+    def apply_hit(self, msg):
+        c = self.car_by_slot(msg.get("slot", -1))
+        if c is None or getattr(c, "remote", False):
+            return
+        c.spin = float(msg.get("spin", 4.0))
+        c.vx *= 0.55
+        c.vz *= 0.55
+        c.crash_t = 3.0
+        if c.is_player:
+            self.show("¡TE HICIERON TAKEDOWN!", 2.0)
+            self.shake = 1.0
+            self.flash = 0.25
+
+    def net_update(self, rdt):
+        net = self.net
+        racing = self.state in ("countdown", "race", "finished")
+        for msg, addr in net.recv_all():
+            t = msg.get("t")
+            if t == "hit":
+                self.apply_hit(msg)
+            elif net.role == "host" and t == "g":
+                if net.peer is None:
+                    self.toast, self.toast_t = "¡SE UNIÓ UN JUGADOR!", 2.5
+                net.peer = addr
+                self.peer_pilot = msg.get("pilot", 0)
+                if racing and msg.get("rid") == self.rid and msg.get("car"):
+                    c = self.car_by_slot(msg["car"][0])
+                    if c is not None and c.remote:
+                        unpack_car(c, msg["car"])
+            elif net.role == "guest" and t == "h":
+                self.peer_pilot = msg.get("pilot", 0)
+                self.diff = msg.get("diff", self.diff)
+                self.tod = msg.get("tod", self.tod)
+                hs = msg.get("st")
+                if self.state == "browse" or (hs == "lobby" and self.state != "lobby"):
+                    self.state = "lobby"
+                    self.toast, self.toast_t = "¡CONECTADO!", 2.0
+                if hs in ("countdown", "race") and msg.get("order") and msg.get("rid") != self.rid:
+                    self.rid = msg["rid"]
+                    self.new_race_mp(msg["order"])
+                racing = self.state in ("countdown", "race", "finished")
+                if racing and msg.get("rid") == self.rid:
+                    if hs == "countdown":
+                        self.countdown = msg.get("cd", self.countdown)
+                        n = int(self.countdown)
+                        if n < self.last_count and n >= 1:
+                            self.sound.play("beep")
+                        self.last_count = n
+                    elif hs == "race" and self.state == "countdown":
+                        self.state = "race"
+                        self.go_t = self.t
+                        self.sound.play("go")
+                        self.show("¡ARRANCA!", 1.2)
+                    rt = msg.get("rt", self.race_time)
+                    if abs(self.race_time - rt) > 0.15:
+                        self.race_time = rt
+                    for a in msg.get("cars", []):
+                        c = self.car_by_slot(a[0])
+                        if c is not None and c.remote:
+                            unpack_car(c, a)
+        # conexion perdida
+        if self.mp == "guest" and self.state in ("lobby", "browse") and not net.connected(6.0) and \
+                time.time() - getattr(self, "join_t", 0) > 6.0:
+            self.leave_mp(msg="NO SE ENCONTRÓ AL ANFITRIÓN")
+            return
+        if racing and not net.connected(4.0):
+            self.lost_t += rdt
+            if self.lost_t > 3.0:
+                self.leave_mp(msg="SE PERDIÓ LA CONEXIÓN")
+                return
+        else:
+            self.lost_t = 0.0
+        # envio
+        net.send_t -= rdt
+        if net.send_t > 0:
+            return
+        net.send_t = NET_RATE
+        if net.role == "host":
+            if self.state == "lobby":
+                net.beacon_t -= NET_RATE
+                if net.beacon_t <= 0:
+                    net.beacon_t = 1.0
+                    net.beacon()
+            st = "lobby" if self.state == "lobby" else ("countdown" if self.state == "countdown" else "race")
+            msg = {"t": "h", "st": st, "pilot": self.sel, "diff": self.diff, "tod": self.tod, "rid": self.rid}
+            if racing:
+                msg.update(cd=round(self.countdown, 3), rt=round(self.race_time, 3), order=self.order,
+                           cars=[pack_car(c) for c in self.cars if not c.remote])
+            net.send(msg)
+        else:
+            msg = {"t": "g", "pilot": self.sel, "rid": self.rid}
+            if racing:
+                msg["car"] = pack_car(self.player)
+            net.send(msg)
+
     def build_intro(self):
         tr = self.track
         self.gc = np.array([np.mean([c.x for c in self.cars]), np.mean([c.z for c in self.cars])])
@@ -3392,7 +3764,7 @@ class GameHD:
         self.message, self.msg_t = msg, dur
 
     def music_mode(self):
-        if self.state in ("menu", "select"):
+        if self.state in ("menu", "select", "lobby", "browse"):
             return "menu"
         if self.tod == 2:
             return "playlist"
@@ -3412,7 +3784,11 @@ class GameHD:
         self.fx.update(dt, self.t)
         self.music.set_mode(self.music_mode())
         self.music.update(rdt)
-        if self.state == "select":
+        if self.net:
+            self.net_update(rdt)
+        if self.state == "browse" and self.disc:
+            self.found = self.disc.poll()
+        if self.state in ("select", "lobby"):
             self.sound.stop_engine()
             self.update_camera(rdt)
             return
@@ -3420,7 +3796,7 @@ class GameHD:
             self.intro_t += rdt
             if self.intro_t >= self.intro_total:
                 self.end_intro()
-        if self.state == "countdown":
+        if self.state == "countdown" and self.mp != "guest":
             self.countdown -= rdt
             n = int(self.countdown)
             if n < self.last_count and n >= 1:
@@ -3439,10 +3815,15 @@ class GameHD:
         boost, slow = DIFFS[self.diff][3] if self.state != "menu" else (0.0, 0.0)
         for car in self.cars:
             car.rb = 1.0
-            if not car.is_player and self.state == "race":
-                gap = self.player.u - car.u
+            if not car.is_player and self.state in ("race", "finished") and getattr(car, "owner", "b") == "b":
+                gap = (self.lead_human_u() if self.mp else self.player.u) - car.u
                 car.rb = 1.0 + boost if gap > 120 else (1.0 - slow if gap < -120 else 1.0)
         for car in self.cars:
+            if getattr(car, "remote", False):
+                self.remote_follow(car, rdt)
+                if car.boosting:
+                    self.fx.nitro_flame(car, self.exhausts(car))
+                continue
             if self.state in ("countdown", "intro"):
                 car.vx = car.vz = 0.0
                 car.throttle = False
@@ -3469,6 +3850,8 @@ class GameHD:
         self.collide_cars()
         L = tr.L
         for car in self.cars:
+            if getattr(car, "remote", False):
+                continue
             ds = car.s_new - car.s
             ds -= L if ds > L / 2 else 0
             ds += L if ds < -L / 2 else 0
@@ -3496,7 +3879,7 @@ class GameHD:
                     self.show("¡META!", 2.5)
                     self.fx.confetti(car.x, car.z)
         self.update_camera(rdt)
-        if self.state == "menu":
+        if self.state in ("menu", "browse"):
             self.sound.stop_engine()
         elif self.state == "intro":
             self.sound.update_engine(25 + 18 * math.sin(self.t * 2.3), True)
@@ -3517,7 +3900,10 @@ class GameHD:
                 if d >= md or d < 1e-6:
                     continue
                 nx, nz = dx / d, dz / d
-                ia, ib = 1 / a.mass, 1 / b.mass
+                ra, rb_ = getattr(a, "remote", False), getattr(b, "remote", False)
+                if ra and rb_:
+                    continue
+                ia, ib = (0.0 if ra else 1 / a.mass), (0.0 if rb_ else 1 / b.mass)
                 push = (md - d) / (ia + ib)
                 a.x -= nx * push * ia
                 a.z -= nz * push * ia
@@ -3540,14 +3926,21 @@ class GameHD:
                         # TAKEDOWN: golpe fuerte del jugador
                         pv = p.vx * (o.x - p.x) + p.vz * (o.z - p.z)
                         if -rel > 9 and pv > 0 and o.crash_t <= 0:
-                            o.spin = random.choice((-1, 1)) * (3.5 + min(6.0, -rel * 0.25))
-                            o.vx *= 0.55
-                            o.vz *= 0.55
+                            spin = random.choice((-1, 1)) * (3.5 + min(6.0, -rel * 0.25))
                             o.crash_t = 3.0
+                            if getattr(o, "remote", False):
+                                if self.net:          # el coche es de la otra computadora: se lo avisamos
+                                    for _ in range(3):
+                                        self.net.send({"t": "hit", "slot": o.slot, "spin": spin})
+                            else:
+                                o.spin = spin
+                                o.vx *= 0.55
+                                o.vz *= 0.55
                             p.nitro = min(1.0, p.nitro + 0.35)
                             self.takedowns += 1
                             self.show("¡TAKEDOWN!", 2.2)
-                            self.slowmo = 0.7
+                            if not self.mp:
+                                self.slowmo = 0.7
                             self.flash = 0.35
 
     def standings(self):
@@ -3567,7 +3960,7 @@ class GameHD:
     def camera(self, dt):
         p = self.player
         self.shake = max(0.0, self.shake - dt * 1.8)
-        if self.state == "select":
+        if self.state in ("select", "lobby"):
             sz = VEH[PILOTS[self.sel]["vehicle"]]["length"] / 4.5
             a = 0.55 + 0.25 * math.sin(self.t * 0.25)
             r = 5.5 + 3.2 * sz
@@ -3577,12 +3970,18 @@ class GameHD:
             cam = self.intro_cam()
             if cam:
                 return cam
-        if self.state == "menu":
+        if self.state in ("menu", "browse"):
             return self.tv_camera(dt)
         self.cam_yaw += wrap_angle(p.ang - self.cam_yaw) * min(1.0, dt * 5.0)
         if self.cam_mode in (0, 1):
             eye, target = self.chase_pose(p, self.cam_yaw, 1.0 if self.cam_mode == 0 else 1.4)
             eye = np.array(eye)
+            for c in self.cars:            # no meter la camara dentro de otro vehiculo (p. ej. un camion detras)
+                if c is not p:
+                    d = math.hypot(eye[0] - c.x, eye[2] - c.z)
+                    lim = c.radius * 2.2 * max(1.0, c.size)
+                    if d < lim:
+                        eye[1] = max(eye[1], (3.3 * c.size + 1.2) * (1 - d / lim) + eye[1] * d / lim)
             if self.cam_pos is not None:
                 eye = self.cam_pos + (eye - self.cam_pos) * min(1.0, dt * 9)
             self.cam_pos = eye
@@ -3677,7 +4076,7 @@ class GameHD:
     def gather_lights(self, eye, tod):
         L = []
         ex, ey, ez = eye
-        if self.state == "select":
+        if self.state in ("select", "lobby"):
             L = [(4.0, 6.0, 4.0, 30.0, 1.0, 0.85, 0.7, 1.3), (-4.0, 5.0, -3.0, 30.0, 0.5, 0.7, 1.0, 0.9),
                  (0.0, 9.0, -6.0, 30.0, 1.0, 1.0, 1.0, 0.9), (-6.0, 2.0, 5.0, 25.0, 0.3, 0.6, 1.0, 0.8)]
         else:
@@ -3830,7 +4229,7 @@ class GameHD:
         proj = perspective(fov, WIN_W / WIN_H, 0.5, 9000.0)
         view = look_at(eye, target)
         vp = proj @ view
-        studio = self.state == "select"
+        studio = self.state in ("select", "lobby")
         lights_b, nl = self.gather_lights(eye, tod)
         night = self.tod == 2 and not studio
         startl = 0.0
@@ -3963,8 +4362,8 @@ class GameHD:
         P = dict(exposure=tod["exposure"], bloom=0.065 if not studio else 0.035, streak=0.045, sat=tod["sat"],
                  grade=tod["grade"], time=self.t, vig=0.42 if self.state != "race" else 0.32,
                  radial=clamp((spd - 210) / 2500, 0, 0.022) + 0.035 * boost, ca=0.0007 + 0.004 * boost,
-                 dof=1.0 if self.state in ("intro", "select", "menu") or (self.state == "finished" and self.results_t > 2) else 0.0,
-                 focus=getattr(self, "focus", 10.0), aperture=0.55 if self.state == "select" else 0.35,
+                 dof=1.0 if self.state in ("intro", "select", "menu", "lobby", "browse") or (self.state == "finished" and self.results_t > 2) else 0.0,
+                 focus=getattr(self, "focus", 10.0), aperture=0.55 if self.state in ("select", "lobby") else 0.35,
                  fade=smooth(self.fade), flash=self.flash, thresh=1.4 if self.tod else 1.2)
         R.post(P)
         self.draw_hud()
@@ -3978,14 +4377,86 @@ class GameHD:
             self.hud_menu()
         elif st == "select":
             self.hud_select()
+        elif st == "lobby":
+            self.hud_lobby()
+        elif st == "browse":
+            self.hud_browse()
         elif st == "intro":
             self.hud_intro()
         else:
             self.hud_race()
         if self.toast_t > 0:
             a = int(255 * min(1.0, self.toast_t * 2))
-            self.panel((WIN_W // 2 - 190, 18, 380, 42), int(a * 0.7), accent=ACCENT)
+            w = font(24).size(self.toast)[0] + 90
+            self.panel((WIN_W // 2 - w // 2, 18, w, 42), int(a * 0.7), accent=ACCENT)
             self.txt(self.toast, 24, (255, 255, 255), (WIN_W // 2, 39), "center", alpha=a)
+
+    def hud_lobby(self):
+        host = self.mp == "host"
+        net = self.net
+        p = PILOTS[self.sel]
+        self.txt("PARTIDA EN RED LOCAL", 46, (255, 255, 255), (60, 36), glow=ACCENT)
+        self.panel((40, 110, 560, 470), 185, accent=ACCENT, slant=24)
+        self.txt("ANFITRIÓN" if host else "INVITADO", 30, ORANGE, (80, 122))
+        if host:
+            self.txt(f"Tu IP:  {net.ip if net else '-'}", 22, (220, 230, 240), (82, 164), italic=False)
+            self.txt("El otro jugador debe elegir UNIRSE (tecla J) en la misma red Wi-Fi.", 15,
+                     (170, 185, 200), (82, 194), italic=False)
+        else:
+            self.txt(f"Conectado a {net.peer[0] if net and net.peer else '-'}", 22, (220, 230, 240), (82, 164),
+                     italic=False)
+        connected = bool(net and net.connected() and (net.peer is not None))
+        if connected and self.peer_pilot is not None:
+            other = PILOTS[self.peer_pilot]["name"]
+            self.txt(f"{'J2' if host else 'J1'}:  {other}", 28, (120, 255, 150), (82, 232))
+        else:
+            dots = "." * (1 + int(self.t * 2) % 3)
+            self.txt(("Esperando invitado" if host else "Esperando al anfitrión") + dots, 26, (255, 215, 60), (82, 232))
+        self.txt("TU PILOTO", 16, (170, 185, 200), (82, 290), italic=False)
+        self.txt(f"‹  {p['name']}  ›", 40, (255, 255, 255), (82, 310))
+        self.txt(p["vname"], 18, (190, 200, 215), (86, 360), italic=False)
+        dname = DIFFS[self.diff][0]
+        self.txt("DIFICULTAD", 16, (170, 185, 200), (82, 404), italic=False)
+        self.txt(dname, 28, (255, 215, 60), (82, 424))
+        self.txt("HORARIO", 16, (170, 185, 200), (330, 404), italic=False)
+        self.txt(TOD_HD[self.tod][0], 28, (255, 255, 255), (330, 424))
+        if host:
+            msg = "ENTER  iniciar carrera" if connected else "(ENTER se activa cuando se una el invitado)"
+            col = (255, 255, 255) if connected else (150, 160, 175)
+            self.txt(msg, 22 if connected else 16, col, (82, 480), italic=connected)
+            hint = "← →  piloto     ↑ ↓  dificultad     N  horario     ESC  salir"
+        else:
+            self.txt("El anfitrión elige dificultad y horario e inicia la carrera.", 16, (170, 185, 200), (82, 480),
+                     italic=False)
+            hint = "← →  piloto     ESC  salir"
+        self.txt(hint, 18, (200, 210, 225), (WIN_W // 2, WIN_H - 26), "center", italic=False, fname="segoeui,arial")
+
+    def hud_browse(self):
+        grad = pygame.Surface((WIN_W, WIN_H), pygame.SRCALPHA)
+        grad.fill((0, 0, 0, 120))
+        self.hud.blit(grad, (0, 0))
+        self.txt("UNIRSE A UNA PARTIDA", 50, (255, 255, 255), (WIN_W // 2, 90), "center", glow=ACCENT)
+        self.panel((WIN_W // 2 - 360, 150, 720, 400), 200, accent=ACCENT, slant=24)
+        found = getattr(self, "found", [])
+        if self.disc and not self.disc.ok:
+            self.txt("No se pudo escuchar la red (puerto 47778 ocupado). Escribe la IP del anfitrión.", 16,
+                     (255, 150, 120), (WIN_W // 2, 184), "center", italic=False)
+        elif not found:
+            dots = "." * (1 + int(self.t * 2) % 3)
+            self.txt("Buscando partidas en tu red" + dots, 26, (255, 215, 60), (WIN_W // 2, 200), "center")
+        self.browse_sel = min(self.browse_sel, max(0, len(found) - 1))
+        for i, (ip, (name, _)) in enumerate(found[:5]):
+            y = 240 + i * 50
+            sel = i == self.browse_sel and not self.ip_typed
+            self.panel((WIN_W // 2 - 300, y, 600, 42), 210 if sel else 110, accent=ORANGE if sel else ACCENT, slant=12)
+            self.txt(f"{name}", 24, (255, 255, 255), (WIN_W // 2 - 260, y + 7))
+            self.txt(ip, 20, (190, 200, 215), (WIN_W // 2 + 270, y + 10), "topright", italic=False)
+        self.txt("¿No aparece? Escribe la IP del anfitrión:", 17, (190, 200, 215), (WIN_W // 2 - 300, 492),
+                 italic=False)
+        cursor = "_" if int(self.t * 2) % 2 == 0 else " "
+        self.txt((self.ip_typed or "") + cursor, 26, (255, 255, 255), (WIN_W // 2 + 110, 486))
+        self.txt("↑ ↓  elegir     ENTER  unirse     números y punto  IP manual     ESC  volver", 18,
+                 (200, 210, 225), (WIN_W // 2, WIN_H - 26), "center", italic=False, fname="segoeui,arial")
         if self.show_fps:
             self.txt(f"{self.fps:4.0f} FPS", 18, (180, 255, 180), (WIN_W // 2, WIN_H - 22), "center", italic=False)
 
@@ -4155,7 +4626,10 @@ class GameHD:
         self.txt("HD", 54, (255, 255, 255), (WIN_W // 2 + 348, 142), "center", shadow=False)
         self.txt("GRAN PREMIO CDMX", 36, ACCENT, (WIN_W // 2, 240), "center")
         if int(self.t * 1.6) % 2 == 0:
-            self.txt("PRESIONA ENTER", 34, (255, 255, 255), (WIN_W // 2, WIN_H - 210), "center", glow=(255, 255, 255))
+            self.txt("PRESIONA ENTER", 34, (255, 255, 255), (WIN_W // 2, WIN_H - 250), "center", glow=(255, 255, 255))
+        self.panel((WIN_W // 2 - 330, WIN_H - 196, 660, 54), 170, accent=ORANGE, slant=18)
+        self.txt("MULTIJUGADOR LAN:   H  crear partida      J  unirse", 22, (255, 255, 255),
+                 (WIN_W // 2 + 6, WIN_H - 169), "center")
         self.panel((0, WIN_H - 120, WIN_W, 120), 150, slant=0)
         rows = ["FLECHAS/WASD  conducir      ESPACIO  derrapar      SHIFT  nitro      C  cámara",
                 f"N  horario: {TOD_HD[self.tod][0]}      F1  calidad: {QUALITY[self.qi][0]}      CTRL  canción (noche)"
@@ -4239,16 +4713,71 @@ class GameHD:
         self.song_banner(24)
 
     # ------------------------------------------------------------ entrada
+    IP_KEYS = {**{getattr(pygame, f"K_{i}"): str(i) for i in range(10)},
+               **{getattr(pygame, f"K_KP{i}"): str(i) for i in range(10)},
+               pygame.K_PERIOD: ".", pygame.K_KP_PERIOD: "."}
+
     def handle_key(self, key):
         st = self.state
         if key == pygame.K_ESCAPE:
             if st == "menu":
                 return False
+            if self.mp or self.disc:
+                self.leave_mp(silent=True)
             self.new_race(attract=True)
+            return True
         elif st == "menu":
             if key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                 self.state = "select"
                 self.fade = 0.0
+            elif key == pygame.K_h:
+                self.start_host()
+            elif key == pygame.K_j:
+                self.start_browse()
+        elif st == "browse":
+            found = getattr(self, "found", [])
+            if key in self.IP_KEYS and len(self.ip_typed) < 15:
+                self.ip_typed += self.IP_KEYS[key]
+            elif key == pygame.K_BACKSPACE:
+                self.ip_typed = self.ip_typed[:-1]
+            elif key in (pygame.K_UP, pygame.K_w):
+                self.browse_sel = max(0, self.browse_sel - 1)
+            elif key in (pygame.K_DOWN, pygame.K_s):
+                self.browse_sel = min(max(0, len(found) - 1), self.browse_sel + 1)
+            elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                if self.ip_typed:
+                    self.join(self.ip_typed)
+                elif found:
+                    self.join(found[self.browse_sel][0])
+            return True
+        elif st == "lobby":
+            if key in (pygame.K_LEFT, pygame.K_a):
+                self.sel = (self.sel - 1) % len(PILOTS)
+            elif key in (pygame.K_RIGHT, pygame.K_d):
+                self.sel = (self.sel + 1) % len(PILOTS)
+            elif self.mp == "host" and key in (pygame.K_UP, pygame.K_w):
+                self.diff = min(len(DIFFS) - 1, self.diff + 1)
+            elif self.mp == "host" and key in (pygame.K_DOWN, pygame.K_s):
+                self.diff = max(0, self.diff - 1)
+            elif self.mp == "host" and key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                if self.net and self.net.peer and self.net.connected():
+                    self.start_mp_race()
+                else:
+                    self.toast, self.toast_t = "TODAVÍA NO SE UNE NADIE", 2.0
+            elif key == pygame.K_n and self.mp == "host":
+                self.tod = (self.tod + 1) % len(TOD_HD)
+            if key == pygame.K_n:
+                return True
+        elif self.mp and key == pygame.K_r:
+            if self.mp == "host":
+                self.start_mp_race()
+            else:
+                self.toast, self.toast_t = "SOLO EL ANFITRIÓN PUEDE REINICIAR", 2.0
+            return True
+        elif self.mp and key == pygame.K_n:
+            if self.mp == "guest":
+                self.toast, self.toast_t = "EL HORARIO LO ELIGE EL ANFITRIÓN", 2.0
+                return True
         elif st == "select":
             if key in (pygame.K_LEFT, pygame.K_a):
                 self.sel = (self.sel - 1) % len(PILOTS)
