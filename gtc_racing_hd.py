@@ -2900,7 +2900,10 @@ class HDCar(Car):
         else:
             self.spin = 0.0
         vf0 = self.vf
+        ang0 = self.ang
         imp = super().drive(thr, brk, steer_in, hb, nitro, dt, track)
+        w = wrap_angle(self.ang - ang0) / max(dt, 1e-4)
+        self.yaw_rate = getattr(self, "yaw_rate", 0.0) * 0.6 + w * 0.4
         vf = self.vf
         self.braking = bool(brk) and vf > 1
         self.wheel_rot = (self.wheel_rot + vf * dt / self.wheel_r) % TAU
@@ -3163,7 +3166,8 @@ class MusicHD:
 # ---------------------------------------------------------------- multijugador en red local (LAN)
 GAME_PORT = 47777        # partida (UDP)
 DISC_PORT = 47778        # anuncios del anfitrion para que el invitado lo encuentre (UDP broadcast)
-NET_RATE = 1 / 30        # envios por segundo
+NET_RATE = 1 / 60        # envios por segundo
+SMOOTH_T = 0.09          # segundos en que se desvanece una correccion de posicion de un coche remoto
 
 
 def local_ip():
@@ -3197,15 +3201,42 @@ class Net:
         self.send_t = 0.0
         self.beacon_t = 0.0
         self.name = socket.gethostname()[:20]
+        # sincronizacion de relojes: desfase minimo observado y tiempo de ida y vuelta (ping)
+        self.offset_min = None
+        self.rtt = 0.0
+        self.rtt_min = None
+        self.peer_ts = None          # ultima hora del otro que recibimos (para devolverla y medir el ping)
+        self.peer_ts_rx = 0.0
 
     def send(self, obj, addr=None):
         addr = addr or self.peer
         if addr is None:
             return
+        now = time.perf_counter()
+        obj["ts"] = now
+        if self.peer_ts is not None:
+            obj["echo"] = self.peer_ts
+            obj["hold"] = now - self.peer_ts_rx
         try:
             self.sock.sendto(json.dumps(obj, separators=(",", ":")).encode(), addr)
         except OSError:
             pass
+
+    def on_timing(self, msg):
+        """Actualiza desfase y ping con cada mensaje. Devuelve la hora local en que se ENVIO el mensaje."""
+        now = time.perf_counter()
+        ts = msg.get("ts")
+        if ts is None:
+            return now
+        sample = now - ts
+        self.offset_min = sample if self.offset_min is None else min(self.offset_min + 0.0002, sample)
+        self.peer_ts, self.peer_ts_rx = ts, now
+        if "echo" in msg:
+            r = max(0.0, now - msg["echo"] - msg.get("hold", 0.0))
+            self.rtt = r if self.rtt == 0 else self.rtt * 0.9 + r * 0.1
+            self.rtt_min = r if self.rtt_min is None else min(self.rtt_min + 0.0002, r)
+        one_way = (self.rtt_min or 0.0) * 0.5
+        return ts + self.offset_min - one_way
 
     def beacon(self):
         msg = json.dumps({"t": "b", "name": self.name, "port": GAME_PORT}).encode()
@@ -3284,11 +3315,16 @@ def pack_car(c):
     return [c.slot, round(c.x, 3), round(c.z, 3), round(c.ang, 4), round(c.vx, 3), round(c.vz, 3), round(c.steer, 3),
             flags, round(c.nitro, 3), round(c.u, 2), c.lap_idx, 1 if c.finished else 0,
             round(c.finish_time, 3) if c.finished else -1, round(c.roll, 4), round(c.pitch, 4),
-            round(c.best_lap, 3) if c.best_lap else -1]
+            round(c.best_lap, 3) if c.best_lap else -1, round(getattr(c, "yaw_rate", 0.0), 4)]
 
 
-def unpack_car(c, a):
-    c.net = dict(x=a[1], z=a[2], ang=a[3], vx=a[4], vz=a[5], t=time.perf_counter())
+def unpack_car(c, a, sent_local=None):
+    old = c.net
+    t0 = time.perf_counter() if sent_local is None else sent_local
+    if old is not None and t0 < old["t"]:
+        return                          # paquete viejo que llego tarde: se ignora
+    c.net = dict(x=a[1], z=a[2], ang=a[3], vx=a[4], vz=a[5], w=a[16] if len(a) > 16 else 0.0, t=t0, new=True,
+                 prev=(old if old is None or not old.get("new") else old.get("prev")))
     c.steer, c.nitro, c.u, c.lap_idx = a[6], a[8], a[9], a[10]
     c.braking, c.boosting, c.drifting = bool(a[7] & 1), bool(a[7] & 2), bool(a[7] & 4)
     if a[11] and not c.finished:
@@ -3623,20 +3659,43 @@ class GameHD:
         humans = [c for c in self.cars if getattr(c, "owner", "") in ("h", "g")] or [self.player]
         return max(c.u for c in humans)
 
+    @staticmethod
+    def predict(st, age):
+        """Donde esta AHORA un coche remoto: avanza su ultimo estado siguiendo su curva (velocidad + giro)."""
+        th = st["w"] * age
+        c, s = math.cos(th), math.sin(th)
+        vx2 = st["vx"] * c - st["vz"] * s
+        vz2 = st["vx"] * s + st["vz"] * c
+        return (st["x"] + (st["vx"] + vx2) * 0.5 * age, st["z"] + (st["vz"] + vz2) * 0.5 * age,
+                st["ang"] + th, vx2, vz2)
+
     def remote_follow(self, car, dt):
-        """Mueve un coche remoto hacia su ultima posicion recibida (con prediccion por su velocidad)."""
+        """Coche remoto sin retraso: prediccion en curva + correccion que se desvanece (sin saltos)."""
         st = car.net
         if st is None:
             return
-        age = min(0.25, time.perf_counter() - st["t"])
-        tx, tz = st["x"] + st["vx"] * age, st["z"] + st["vz"] * age
-        if math.hypot(tx - car.x, tz - car.z) > 15:
-            car.x, car.z, car.ang = tx, tz, st["ang"]
-        k = min(1.0, dt * 14)
-        car.x += (tx - car.x) * k
-        car.z += (tz - car.z) * k
-        car.ang = (car.ang + wrap_angle(st["ang"] - car.ang) * k) % TAU
-        car.vx, car.vz = st["vx"], st["vz"]
+        now = time.perf_counter()
+        age = clamp(now - st["t"], 0.0, 0.35)
+        px, pz, pa, pvx, pvz = self.predict(st, age)
+        err = getattr(car, "err", [0.0, 0.0, 0.0])
+        if st.get("new"):
+            st["new"] = False
+            prev = st.get("prev")
+            if prev is not None:
+                # lo que se estaria viendo AHORA con el dato anterior vs lo que dice el dato nuevo
+                ox, oz, oa, _, _ = self.predict(prev, clamp(now - prev["t"], 0.0, 0.35))
+                err = [ox + err[0] - px, oz + err[1] - pz, wrap_angle(oa + err[2] - pa)]
+                if math.hypot(err[0], err[1]) > 12:      # demasiado lejos: se coloca directo
+                    err = [0.0, 0.0, 0.0]
+            else:
+                err = [0.0, 0.0, 0.0]
+            st["prev"] = None
+        k = math.exp(-dt / SMOOTH_T)
+        err = [e * k for e in err]
+        car.err = err
+        car.x, car.z = px + err[0], pz + err[1]
+        car.ang = (pa + err[2]) % TAU
+        car.vx, car.vz = pvx, pvz
         car.wheel_rot = (car.wheel_rot + car.vf * dt / car.wheel_r) % TAU
 
     def apply_hit(self, msg):
@@ -3657,6 +3716,7 @@ class GameHD:
         racing = self.state in ("countdown", "race", "finished")
         for msg, addr in net.recv_all():
             t = msg.get("t")
+            sent_local = net.on_timing(msg)
             if t == "hit":
                 self.apply_hit(msg)
             elif net.role == "host" and t == "g":
@@ -3667,7 +3727,7 @@ class GameHD:
                 if racing and msg.get("rid") == self.rid and msg.get("car"):
                     c = self.car_by_slot(msg["car"][0])
                     if c is not None and c.remote:
-                        unpack_car(c, msg["car"])
+                        unpack_car(c, msg["car"], sent_local)
             elif net.role == "guest" and t == "h":
                 self.peer_pilot = msg.get("pilot", 0)
                 self.diff = msg.get("diff", self.diff)
@@ -3692,13 +3752,13 @@ class GameHD:
                         self.go_t = self.t
                         self.sound.play("go")
                         self.show("¡ARRANCA!", 1.2)
-                    rt = msg.get("rt", self.race_time)
+                    rt = msg.get("rt", self.race_time) + max(0.0, time.perf_counter() - sent_local)
                     if abs(self.race_time - rt) > 0.15:
                         self.race_time = rt
                     for a in msg.get("cars", []):
                         c = self.car_by_slot(a[0])
                         if c is not None and c.remote:
-                            unpack_car(c, a)
+                            unpack_car(c, a, sent_local)
         # conexion perdida
         if self.mp == "guest" and self.state in ("lobby", "browse") and not net.connected(6.0) and \
                 time.time() - getattr(self, "join_t", 0) > 6.0:
@@ -3711,7 +3771,13 @@ class GameHD:
                 return
         else:
             self.lost_t = 0.0
-        # envio
+
+    def net_send(self, rdt):
+        """Se llama justo despues de la fisica: asi la hora del mensaje es la hora real de las posiciones."""
+        net = self.net
+        if net is None:
+            return
+        racing = self.state in ("countdown", "race", "finished")
         net.send_t -= rdt
         if net.send_t > 0:
             return
@@ -3791,6 +3857,8 @@ class GameHD:
         if self.state in ("select", "lobby"):
             self.sound.stop_engine()
             self.update_camera(rdt)
+            if self.net:
+                self.net_send(rdt)
             return
         if self.state == "intro":
             self.intro_t += rdt
@@ -3848,6 +3916,8 @@ class GameHD:
                 if car.is_player and car.boost_start and self.state == "race":
                     self.sound.play("whoosh")
         self.collide_cars()
+        if self.net:
+            self.net_send(rdt)
         L = tr.L
         for car in self.cars:
             if getattr(car, "remote", False):
@@ -4495,6 +4565,11 @@ class GameHD:
             self.txt(c.name, 17, col, (66, y + 4))
         self.minimap()
         self.speedometer(p)
+        if self.mp and self.net:
+            ping = int(self.net.rtt * 1000)
+            col = (120, 255, 150) if ping < 60 else ((255, 215, 60) if ping < 120 else (255, 80, 60))
+            self.txt(f"LAN  {'ANFITRIÓN' if self.mp == 'host' else 'INVITADO'}   PING {ping} ms", 16, col,
+                     (WIN_W - 139, 262), "center", italic=False)
         # mensajes
         if self.state == "countdown":
             n = int(self.countdown)
