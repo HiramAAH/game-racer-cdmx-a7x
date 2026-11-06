@@ -41,7 +41,7 @@ CIRCUITS = {
                ((622, 224), "Avenida Fray Servando Teresa de Mier"),
                ((672, 145), "Circuito Interior Boulevard Puerto Aéreo"),
                ((700, 80), "Circuito Interior Boulevard Puerto Aéreo"),
-               ((745, 22), "Circuito Interior Boulevard Puerto Aéreo"), ((830, 62), "Calle Asistencia Pública"),
+               ((830, 62), "Calle Asistencia Pública"),
                ((885, 104), "Calle Asistencia Pública"), ((930, 182), "Avenida Economía"),
                ((900, 220), "Avenida Economía"), ((860, 300), "Calle 47"), ((830, 362), "Calle 47"),
                ((805, 403), "Calle 47"), ((770, 410), "Viaducto Río de la Piedad"),
@@ -72,7 +72,8 @@ CIRCUITS = {
         # Monumento a la Revolucion (bajo los arcos) y el bosque alrededor del Castillo
         fixed={7: (19.4361745, -99.1546214), 31: (19.4204, -99.1766), 32: (19.4181, -99.1812),
                33: (19.4188, -99.1858), 34: (19.4236, -99.1866)},
-        legs={6: "foot", 7: "foot", 30: "foot", 31: "foot", 32: "foot", 33: "foot", 34: "foot"}),
+        legs={6: "foot", 7: "foot", 30: "foot", 31: "foot", 32: "foot", 33: "foot", 34: "foot"},
+        through={7: "Plaza de la República"}),
     "slp": dict(
         ref=[((528, 590), (22.1383403, -100.9706035)), ((851, 367), (22.1711248, -100.9190721)),
              ((620, 801), (22.109398, -100.9556467)), ((244, 505), (22.1510405, -101.0170912))],
@@ -91,7 +92,7 @@ CIRCUITS = {
                ((716, 255), "Avenida Miguel Hidalgo")],
         # Jardin Hidalgo de Soledad (meta), calle Zaragoza y Plaza Citadina
         fixed={0: (22.1879, -100.9366), 1: (22.1908, -100.9373), 2: (22.1990, -100.9386), 26: (22.1824, -100.9501)},
-        legs={14: "foot", 15: "foot", 16: "foot"}),
+        legs={14: "foot", 15: "foot", 16: "foot"}, soft_start=True),
 }
 
 
@@ -197,35 +198,59 @@ class Graph:
                     best, bd = n, d
         return best
 
-    def path(self, a, b, allow):
-        """A* de a a b usando solo calles 'allow': [(nodo, indice_de_calle)]."""
+    def path(self, a, b, allow, prev=None, only=None):
+        """A* de a a b usando solo calles 'allow': [(nodo, indice_de_calle)].
+        Cuenta las vueltas: una vuelta cerrada cuesta como varios cientos de metros (una vuelta en U, casi prohibida)."""
         import heapq
         goal = self.node[b]
-        h = lambda n: math.hypot((self.node[n][1] - goal[1]) * 111320 * math.cos(math.radians(goal[0])),
-                                 (self.node[n][0] - goal[0]) * 110574) * 0.8
-        openq = [(h(a), 0.0, a)]
-        came, gs = {a: (None, None)}, {a: 0.0}
+        kx = 111320 * math.cos(math.radians(goal[0]))
+        h = lambda n: math.hypot((self.node[n][1] - goal[1]) * kx, (self.node[n][0] - goal[0]) * 110574) * 0.8
+
+        def vec(u, v):
+            (la, lo), (lb, ob) = self.node[u], self.node[v]
+            return ((ob - lo) * kx, (lb - la) * 110574)
+        start = (a, prev)
+        openq = [(h(a), 0.0, start)]
+        came, gs = {start: (None, None)}, {start: 0.0}
+        end = None
         while openq:
-            _, g, u = heapq.heappop(openq)
+            _, g, st = heapq.heappop(openq)
+            u, p = st
             if u == b:
+                end = st
                 break
-            if g > gs.get(u, 1e18):
+            if g > gs.get(st, 1e18):
                 continue
+            d0 = vec(p, u) if p is not None else None
             for v, c, wi in self.adj.get(u, ()):
-                if self.ways[wi].get("tags", {}).get("highway", "") not in allow:
+                if v == p or self.ways[wi].get("tags", {}).get("highway", "") not in allow:
+                    continue
+                if only is not None and norm_name(self.ways[wi].get("tags", {}).get("name", "")) != only:
                     continue
                 ng = g + c
-                if ng < gs.get(v, 1e18):
-                    gs[v] = ng
-                    came[v] = (u, wi)
-                    heapq.heappush(openq, (ng + h(v), ng, v))
-        if b not in came:
+                if d0 is not None:
+                    d1 = vec(u, v)
+                    l0, l1 = math.hypot(*d0), math.hypot(*d1)
+                    if l0 > 0.5 and l1 > 0.5:
+                        cosang = (d0[0] * d1[0] + d0[1] * d1[1]) / (l0 * l1)
+                        if cosang < -0.94:
+                            ng += 3000.0                         # vuelta en U
+                        elif cosang < -0.6:
+                            ng += 200.0                          # esquina muy aguda
+                        elif cosang < 0.25:
+                            ng += 30.0                           # vuelta normal (evita zigzag por la colonia)
+                ns = (v, u)
+                if ng < gs.get(ns, 1e18):
+                    gs[ns] = ng
+                    came[ns] = (st, wi)
+                    heapq.heappush(openq, (ng + h(v), ng, ns))
+        if end is None:
             raise RuntimeError("no hay camino entre dos puntos de la ruta")
-        out, n = [], b
-        while n is not None:
-            p, wi = came[n]
-            out.append((n, wi))
-            n = p
+        out, st = [], end
+        while st is not None:
+            pst, wi = came[st]
+            out.append((st[0], wi))
+            st = pst
         return out[::-1]
 
 
@@ -304,23 +329,37 @@ def build_route_graph(key, c):
     for i, ll in c.get("fixed", {}).items():
         wps[i] = ll
     # nodos de cada tipo de calle para buscar el mas cercano rapido
-    ids, xy, cls, nms = [], [], [], []
-    for w in G.ways:
-        h_ = w.get("tags", {}).get("highway", "")
-        nm = norm_name(w.get("tags", {}).get("name", ""))
-        for n in w["nodes"]:
-            if n in G.node:
-                ids.append(n)
-                xy.append(G.node[n])
-                cls.append(h_)
-                nms.append(nm)
-    ids, xy, cls, nms = np.array(ids), np.array(xy), np.array(cls), np.array(nms)
+    ids, xy, cls, nms, dirs, ows = [], [], [], [], [], []
     kx = 111320 * math.cos(math.radians(float(la.mean())))
+    for w in G.ways:
+        t_ = w.get("tags", {})
+        h_ = t_.get("highway", "")
+        nm = norm_name(t_.get("name", ""))
+        ow = t_.get("oneway") in ("yes", "1", "-1") or h_ == "motorway"
+        sg = -1.0 if t_.get("oneway") == "-1" else 1.0
+        ns = [n for n in w["nodes"] if n in G.node]
+        for k_, n in enumerate(ns):
+            a_, b_ = ns[max(0, k_ - 1)], ns[min(len(ns) - 1, k_ + 1)]
+            dv = np.array([(G.node[b_][1] - G.node[a_][1]) * kx, (G.node[b_][0] - G.node[a_][0]) * 110574]) * sg
+            dv /= max(np.hypot(*dv), 1e-6)
+            ids.append(n)
+            xy.append(G.node[n])
+            cls.append(h_)
+            nms.append(nm)
+            dirs.append(dv)
+            ows.append(ow)
+    ids, xy, cls, nms = np.array(ids), np.array(xy), np.array(cls), np.array(nms)
+    dirs, ows = np.array(dirs), np.array(ows)
 
-    def snap(ll, allow, name=None):
-        ok = np.isin(cls, allow)
+    def snap(ll, allow, name=None, travel=None):
+        ok0 = np.isin(cls, allow)
+        ok = ok0.copy()
+        if travel is not None:                          # calles de un sentido: solo la calzada que va hacia alla
+            ok &= ~(ows & ((dirs @ travel) < 0.2))
         if name:
             okn = ok & (nms == norm_name(name))
+            if not okn.any():
+                okn = ok0 & (nms == norm_name(name))    # la calle solo existe en el otro sentido
             if okn.any():
                 ok = okn
             else:
@@ -329,14 +368,54 @@ def build_route_graph(key, c):
         d *= np.array([COST.get(h_.replace("_link", ""), 2.0) for h_ in cls[ok]])
         return int(ids[ok][int(np.argmin(d))])
     seq = []
+    c["_start_ll"] = wps[0]
+    if c.get("soft_start"):                               # no forzar la vuelta en el punto de salida
+        wps, wnames = wps[1:], wnames[1:]
+        c["legs"] = {k - 1: v for k, v in c.get("legs", {}).items() if k > 0}
+        c["through"] = {k - 1: v for k, v in c.get("through", {}).items() if k > 0}
     wps.append(wps[0])
     wnames.append(wnames[0])
     for i in range(len(wps) - 1):
         allow = DRIVE + (WALK if c.get("legs", {}).get(i) == "foot" else ())
-        a, b = snap(wps[i], allow, wnames[i]), snap(wps[i + 1], allow, wnames[i + 1])
+        def travel(k_):
+            a_, b_ = wps[(k_ - 1) % (len(wps) - 1)], wps[(k_ + 1) % (len(wps) - 1)]
+            v = np.array([(b_[1] - a_[1]) * kx, (b_[0] - a_[0]) * 110574])
+            return v / max(np.hypot(*v), 1e-6)
+        a = snap(wps[i], allow, wnames[i], travel(i))
+        b = snap(wps[i + 1], allow, wnames[i + 1], travel(i + 1))
+        through = c.get("through", {})
+        if i in through and seq:                          # se sale del paso obligado por el nodo de salida
+            a = seq[-1][0]
+        if (i + 1) in through:                            # paso obligado en linea recta (p. ej. bajo un monumento)
+            ctr = wps[i + 1]
+
+            def toward(q, dist=70.0):
+                v = np.array([(q[1] - ctr[1]) * kx, (q[0] - ctr[0]) * 110574])
+                v = v / max(np.hypot(*v), 1e-6) * dist
+                return (ctr[0] + v[1] / 110574, ctr[1] + v[0] / kx)
+            ent = snap(toward(wps[i]), DRIVE + WALK)
+            ext = snap(toward(wps[(i + 2) % (len(wps) - 1)]), DRIVE + WALK)
+            G.node[-7 - i] = ctr
+            G.ways.append({"tags": {"highway": "pedestrian", "name": through[i + 1]}, "nodes": []})
+            fw = len(G.ways) - 1
+            pth = G.path(a, ent, allow, prev=seq[-2][0] if len(seq) >= 2 else None) if a != ent else [(a, None)]
+            seq += pth if not seq else pth[1:]
+            seq += [(-7 - i, fw), (ext, fw)]
+            continue
         if a == b:
             continue
-        p = G.path(a, b, allow)
+        prv = seq[-2][0] if len(seq) >= 2 else None
+        p = None
+        if wnames[i] and wnames[i + 1] and norm_name(wnames[i]) == norm_name(wnames[i + 1]):
+            try:                                            # mismo nombre: el tramo va solo por esa calle
+                p = G.path(a, b, allow, prev=prv, only=norm_name(wnames[i]))
+            except RuntimeError:
+                p = None
+        if p is None:
+            try:
+                p = G.path(a, b, allow, prev=prv)
+            except RuntimeError:                            # punto en calle cerrada: se permite regresar
+                p = G.path(a, b, allow, prev=None)
         seq += p if not seq else p[1:]
     closing = seq[-1][0] == seq[0][0]
     body = remove_loops(seq[:-1] if closing else seq, G)
@@ -425,7 +504,7 @@ def lanes_halfwidth(t, foot=False):
     return float(np.clip(half, 3.6 if not foot else 4.0, 10.5))
 
 
-def smooth_closed(Q, need, iters=80):
+def smooth_closed(Q, need, iters=400):
     """Redondea las esquinas de una linea cerrada (1 m entre puntos) hasta que el radio de giro sea >= need."""
     Q = Q.copy()
     k = np.exp(-0.5 * (np.arange(-9, 10) / 3.0) ** 2)
@@ -520,8 +599,27 @@ def process(key):
     Q, Wq = np.array(Q), np.array(Wq)
     rw_q = np.array([lanes_halfwidth(G.ways[w].get("tags", {}), w in foot_ways) for w in Wq])
     rw_q = np.minimum(rw_q, np.minimum.reduce([np.roll(rw_q, o) for o in range(-25, 26, 5)]) + 2.5)
-    Qs = smooth_closed(Q, rw_q + 2.5)
+    Qs = smooth_closed(Q, np.maximum(rw_q + 2.5, 13.0))         # esquinas bruscas, pero que se puedan tomar
     pts, qi = resample_closed(Qs, 3.0)
+    # la salida/meta en el tramo recto mas cercano al punto marcado (la parrilla necesita ~40 m rectos)
+    dd_ = np.roll(pts, -1, 0) - pts
+    hh_ = np.arctan2(dd_[:, 1], dd_[:, 0])
+    bend = np.abs((np.roll(hh_, -15) - np.roll(hh_, 20) + np.pi) % (2 * np.pi) - np.pi)
+    cand = np.nonzero(bend < math.radians(12))[0]
+    sll = c.get("_start_ll", G.node[nodes[0]])
+    s0 = np.array(proj(*sll))
+    i0 = int(np.argmin(np.hypot(pts[:, 0] - s0[0], pts[:, 1] - s0[1])))
+    if len(cand):
+        dd0 = np.abs((cand - i0 + len(pts) // 2) % len(pts) - len(pts) // 2)
+        k0 = int(cand[np.argmin(dd0)])
+        pts, qi = np.roll(pts, -k0, 0), np.roll(qi, -k0)
+        print(f"   salida en un tramo recto a {np.hypot(*(pts[0] - s0)):.0f} m del punto marcado")
+    dd_ = np.roll(pts, -1, 0) - pts
+    hh_ = np.arctan2(dd_[:, 1], dd_[:, 0])
+    turn = np.abs((np.roll(hh_, -8) - hh_ + np.pi) % (2 * np.pi) - np.pi)
+    for i in np.nonzero(turn > math.radians(120))[0][::8]:
+        la_, lo_ = lat0 - pts[i][1] / 110574.0, lon0 + pts[i][0] / (111320 * math.cos(math.radians(lat0)))
+        print(f"   (aviso) vuelta en U en el km {i * 3 / 1000:.2f} ({la_:.5f}, {lo_:.5f})")
     W = Wq[qi]
     n = len(pts)
     tags = [G.ways[w].get("tags", {}) for w in W]
@@ -730,21 +828,32 @@ def process(key):
     # ---- datos del entorno alrededor de la ruta
     simp = [unproj(*pts[i]) for i in range(0, n, 30)] + [unproj(*pts[0])]
     feats = {"bld": [], "areas": [], "water": [], "trees": [], "pois": [], "rail": []}
-    for ci, a in enumerate(range(0, len(simp) - 1, 45)):
-        chunk = simp[a:a + 46]
-        line = ",".join(f"{la:.5f},{lo:.5f}" for la, lo in chunk)
-        q = (f'[out:json][timeout:300];('
-             f'way["building"](around:110,{line});'
-             f'way["leisure"~"park|garden|pitch|stadium|playground"](around:350,{line});'
-             f'way["landuse"~"grass|recreation_ground|cemetery|forest|meadow"](around:300,{line});'
-             f'way["natural"~"water|wood|scrub"](around:400,{line});'
-             f'way["waterway"~"river|canal|stream|drain"](around:400,{line});'
-             f'way["aeroway"~"runway|taxiway|apron|terminal"](around:2500,{line});'
-             f'way["railway"~"rail|light_rail|subway|tram"](around:200,{line});'
-             f'node["natural"="tree"](around:60,{line});'
-             f'node["shop"](around:70,{line});node["amenity"~"pharmacy|restaurant|fast_food|bank|fuel|cafe"](around:70,{line});'
-             f');out geom qt;')
-        r = overpass(q, f"{key}_entorno_{ci}")
+    # (la busqueda 'around' con una linea no funciona bien en el servidor: se piden recuadros por tramo
+    #  y se filtra aqui lo que quede cerca de la ruta)
+    queries = []
+    for ci, a in enumerate(range(0, len(simp) - 1, 20)):
+        chunk = np.array(simp[a:a + 21])
+        m_ = 0.0042
+        bb = (chunk[:, 0].min() - m_, chunk[:, 1].min() - m_, chunk[:, 0].max() + m_, chunk[:, 1].max() + m_)
+        b = f"{bb[0]:.5f},{bb[1]:.5f},{bb[2]:.5f},{bb[3]:.5f}"
+        queries.append((f'[out:json][timeout:300];('
+                        f'way["building"]({b});'
+                        f'way["leisure"~"park|garden|pitch|stadium|playground"]({b});'
+                        f'way["landuse"~"grass|recreation_ground|cemetery|forest|meadow"]({b});'
+                        f'way["natural"~"water|wood|scrub"]({b});'
+                        f'way["waterway"~"river|canal|stream|drain"]({b});'
+                        f'way["railway"~"rail|light_rail|subway|tram"]({b});'
+                        f'node["natural"="tree"]({b});'
+                        f'node["shop"]({b});node["amenity"~"pharmacy|restaurant|fast_food|bank|fuel|cafe"]({b});'
+                        f');out geom qt;', f"{key}_zona_{ci}"))
+    la_ = np.array([q[0] for q in simp])
+    lo_ = np.array([q[1] for q in simp])
+    m_ = 0.03
+    queries.append((f'[out:json][timeout:300];way["aeroway"~"runway|taxiway|apron|terminal"]'
+                    f'({la_.min() - m_:.5f},{lo_.min() - m_:.5f},{la_.max() + m_:.5f},{lo_.max() + m_:.5f});'
+                    f'out geom qt;', f"{key}_aeropuerto"))
+    for q, name in queries:
+        r = overpass(q, name)
         for e in r["elements"]:
             t = e.get("tags", {})
             if e["type"] == "node":
@@ -762,11 +871,11 @@ def process(key):
                 lv = t.get("building:levels", "")
                 ht = t.get("height", "")
                 try:
-                    lv = float(str(lv).split(";")[0])
+                    lv = float((str(lv).split(";") or ["x"])[0].replace(",", "."))
                 except ValueError:
                     lv = 0
                 try:
-                    ht = float(str(ht).split()[0])
+                    ht = float((str(ht).split() or ["x"])[0].replace(",", "."))
                 except ValueError:
                     ht = 0
                 feats["bld"].append({"id": e["id"], "p": poly, "lv": lv, "h": ht, "k": t.get("building", "yes"),
@@ -790,6 +899,30 @@ def process(key):
             out.append(f_)
         feats[kk] = out
     feats["trees"] = [list(t_) for t_ in {tuple(t_) for t_ in feats["trees"]}]
+    # ---- quedarse solo con lo que esta cerca de la ruta
+    RP = pts[::4].astype(np.float32)
+
+    def dmin(Q):
+        Q = np.asarray(Q, np.float32).reshape(-1, 2)
+        out = np.empty(len(Q), np.float32)
+        for a in range(0, len(Q), 2048):
+            c = Q[a:a + 2048]
+            out[a:a + 2048] = np.sqrt(((c[:, None, :] - RP[None]) ** 2).sum(-1).min(1))
+        return out
+    if feats["bld"]:
+        cen = np.array([np.mean(b["p"], axis=0) for b in feats["bld"]])
+        dd = dmin(cen)
+        feats["bld"] = [b for b, x in zip(feats["bld"], dd) if x < 140]
+    for kk, lim in (("areas", 450), ("water", 450), ("rail", 250)):
+        keep = []
+        for f_ in feats[kk]:
+            if f_["k"] in ("runway", "taxiway", "apron", "terminal") or dmin(f_["p"][::3]).min() < lim:
+                keep.append(f_)
+        feats[kk] = keep
+    for kk, lim in (("trees", 60), ("pois", 80)):
+        if feats[kk]:
+            dd = dmin([q[:2] for q in feats[kk]])
+            feats[kk] = [q for q, x in zip(feats[kk], dd) if x < lim]
     # ---- otras calles cerca de la ruta (para la ciudad)
     ways = []
     rx = np.array(pts)

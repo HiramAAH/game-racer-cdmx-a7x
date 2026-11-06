@@ -9,27 +9,28 @@ sin modificarlo, y agrega:
 
 PISTAS
   ESTADIO GNP SEGUROS  Autodromo original con el concierto de Avenged Sevenfold (noche).
-  ESTADIO FRAY NANO    Circuito callejero CDMX: sale junto al Estadio Fray Nano (concierto de Limp Bizkit
-                       de noche), sube por el Blvd. Puerto Aereo junto al aeropuerto (aviones aterrizando y
-                       despegando), baja por el Palacio de los Deportes y el Estadio GNP. Puentes peatonales,
-                       semaforos, cebras, locales, puestos y mucho publico.
-                       Soundtrack de noche: pon las canciones en la carpeta "music_limp_bizkit"
-                       (mientras este vacia suena la musica de carrera del juego).
-  CHAPULTEPEC          Fiesta del Mundial, 11.6 km de pura velocidad: sale del Museo de Antropologia por
-                       Paseo de la Reforma (Angel, torres), cruza Insurgentes, pasa bajo los arcos del Monumento
-                       a la Revolucion (Fan Fest), sube a la Basilica, regresa por Insurgentes y entra al bosque
-                       rodeando el Castillo. Rampas de turbo, banderines, balones gigantes y, de noche, fuegos
-                       artificiales en toda la ruta. Soundtrack de noche: carpeta "music_mundial".
-  SAN LUIS POTOSÍ      Feria de la Enchilada, 9.4 km: sale del Jardin Hidalgo de Soledad, carretera 57 con sus
-                       puentes vehiculares (vigas a la vista), Coronel Romero (Cruz Roja, Politecnica, Hospital
-                       del Nino y la Mujer), periferico, Parque Tangamanga, Salvador Nava, centro historico
-                       (Catedral, Caja del Agua), Rio Santiago, Acceso Norte y Av. Soledad. De noche: baile,
-                       rueda de la fortuna y carrusel girando, castillo pirotecnico y cohetes. Musica: "music_feria".
+  Los otros tres son CALLES REALES (OpenStreetMap): el trazado, el ancho de cada calle, los puentes
+  vehiculares por los que se pasa POR ENCIMA, los deprimidos, las subidas y bajadas (altura real SRTM),
+  los cruces y los edificios reales donde OSM los tiene (donde no, manzanas a lo largo de la calle real).
+  Se choca con fachadas, vallas, parapetos, camellones y postes. Arriba se ve el nombre de la calle.
+  ESTADIO FRAY NANO    Fernando Iglesias Calderon, Fray Servando, Circuito Interior/Blvd. Puerto Aereo
+                       (junto al aeropuerto), Col. Federal, Calle 47, Viaducto y Av. Morelos. Concierto de
+                       Limp Bizkit en el estadio (noche). Musica: carpeta "music_limp_bizkit".
+  CHAPULTEPEC          Reforma desde el Museo de Antropologia, el Angel, bajo el Monumento a la Revolucion,
+                       Reforma Norte, Calzada de Guadalupe a la Basilica, Insurgentes, Av. Chapultepec y el
+                       bosque alrededor del Castillo. Fiesta del Mundial (noche). Musica: "music_mundial".
+  SAN LUIS POTOSÍ      Jardin Hidalgo de Soledad, Zaragoza, Autopista 57 (puentes), Salvador Nava, Coronel
+                       Romero (Politecnica, Hospital del Nino y la Mujer), Periferico, Tangamanga, Mariano
+                       Jimenez, Damian Carmona, Rio Santiago, Acceso Norte, Av. Soledad, Citadina y
+                       Av. Hidalgo. Feria de la Enchilada (noche). Musica: "music_feria".
+  Los datos de las calles estan en la carpeta mapas_osm/ (se generan con gtc_mapas_osm.py).
+  Datos (c) colaboradores de OpenStreetMap, licencia ODbL.
 
 COMO AGREGAR UNA PISTA NUEVA
-  Copia la plantilla PLANTILLA_DE_MAPA, cambia la clave, el nombre y los puntos del trazado (en metros,
-  recorridos en el sentido de la carrera, la meta esta en el primer punto) y agregala a MAPS.
-  builder="calles" arma un circuito callejero como el de Fray Nano.
+  Pista inventada: copia PLANTILLA_DE_MAPA, cambia la clave, el nombre y los puntos del trazado (en metros,
+  en el sentido de la carrera, la meta es el primer punto) y agregala a MAPS.
+  Pista con calles reales: agrega el circuito en gtc_mapas_osm.py (CIRCUITS), corre
+  "python gtc_mapas_osm.py <clave>" y usa builder="osm", osm="<clave>" en su MapDef.
 
 Requiere en la misma carpeta: gtc_racing_hd.py y gtc_racing_3d.py.
 """
@@ -160,11 +161,11 @@ MAPS = [
            control=base.CONTROL, scale=base.TRACK_SCALE,
            stadium=(base.STADIUM_PTS.start, base.STADIUM_PTS.stop), stadium_scale=base.STADIUM_SCALE,
            concert=True, extras=("angel", "bandera", "guadalupe", "papel"), builder="cdmx"),
-    MapDef("fraynano", "ESTADIO FRAY NANO", "Calles de la CDMX · concierto de Limp Bizkit",
-           control=FRAY_NANO_ROUTE, scale=4.5, laps=2, concert=True, builder="calles", urban=True,
-           ped_bridges=9, fans=0.9, extras=("papel", "guadalupe"),
+    MapDef("fraynano", "ESTADIO FRAY NANO", "Calles reales: Jardín Balbuena · Puerto Aéreo · Viaducto",
+           control=FRAY_NANO_ROUTE, scale=4.5, laps=1, concert=True, builder="osm", osm="fraynano",
+           datum="fraynano", urban=True, fans=0.9, extras=("papel",),
            venue=dict(name="ESTADIO FRAY NANO", band="LIMP BIZKIT", pos=(345, 372), r0=62, rows=26),
-           landmarks=[("gnp", (690, 472)), ("palacio", (565, 464)), ("aeropuerto", (800, -22), (0.77, -0.64))],
+           landmarks=["estadio_concierto", "gnp", "palacio", "aicm"],
            signs={1: ((10, 60, 130), (30, 100, 190), "AEROPUERTO AICM", (255, 255, 255)),
                   2: ((5, 5, 5), (45, 5, 5), "AVENGED SEVENFOLD", (240, 40, 40)),
                   9: ((0, 70, 40), (20, 120, 60), "ESTADIO FRAY NANO", (255, 255, 255)),
@@ -172,14 +173,12 @@ MAPS = [
                   14: ((5, 5, 5), (50, 30, 0), "HOY EN VIVO · LIMP BIZKIT", (255, 170, 40))},
            band_sign=10, music_dir="music_limp_bizkit"),
     MapDef("chapultepec", "CHAPULTEPEC", "Reforma · Insurgentes · fiesta del Mundial",
-           control=CHAPULTEPEC_ROUTE, scale=4.5, laps=1, concert=True, builder="calles", urban=True,
-           ped_bridges=10, fans=0.85, extras=("banderines", "balones", "guadalupe"), palette="mexico",
-           fireworks=True, pads=14, city_margin=450.0, city_step=40.0, detail_dist=250.0,
+           control=CHAPULTEPEC_ROUTE, scale=4.5, laps=1, concert=True, builder="osm", osm="chapultepec",
+           datum="monumento", urban=True, fans=0.85, extras=("banderines",), palette="mexico",
+           fireworks=True,
            venue=dict(name="MONUMENTO A LA REVOLUCIÓN", band="FIESTA MUNDIALISTA", tag="¡VAMOS MÉXICO!",
                       pos=(482, 600), r0=55, kind="fanfest"),
-           landmarks=[("museo", (95, 662)), ("parque", ((-110, 650), (125, 778)), 900), ("lago", (70, 713), (70, 24)),
-                      ("castillo", (-36, 713)), ("angel", (240, 676)), ("torres", (0.025, 0.105), 10),
-                      ("monumento", (420, 570)), ("basilica", (815, 35))],
+           landmarks=["museo", "castillo", "angel", "monumento", "basilica", "fanfest"],
            signs={1: ((0, 104, 71), (0, 140, 90), "MUNDIAL 2026", (255, 255, 255)),
                   2: ((206, 17, 38), (240, 40, 60), "¡GOOOOL!", (255, 255, 255)),
                   9: ((0, 104, 71), (20, 140, 90), "¡VAMOS MÉXICO!", (255, 255, 255)),
@@ -188,16 +187,14 @@ MAPS = [
                   14: ((5, 5, 5), (0, 60, 40), "HOY: FIESTA MUNDIALISTA", (255, 215, 40))},
            band_sign=10, music_dir="music_mundial"),
     MapDef("slp", "SAN LUIS POTOSÍ", "Carretera 57 · Tangamanga · Feria de la Enchilada",
-           control=SLP_ROUTE, scale=5.5, laps=1, concert=True, builder="calles", urban=True,
-           ped_bridges=8, fans=0.85, extras=("papel", "guadalupe"), fireworks=True,
-           city_margin=500.0, city_step=38.0, detail_dist=300.0,
+           control=SLP_ROUTE, scale=5.5, laps=1, concert=True, builder="osm", osm="slp", datum="jardin",
+           urban=True, fans=0.85, extras=("papel",), fireworks=True,
            venue=dict(name="JARDÍN HIDALGO · SOLEDAD", band="FERIA DE LA ENCHILADA", tag="¡QUE SIGA LA FIESTA!",
                       pos=(815, 300), r0=38, kind="feria"),
-           landmarks=[("vehiculares", (614, 410), (613, 615), 4), ("jardin", (725, 262), 42.0),
-                      ("edificio", (575, 622), 13, rgb(235, 235, 235)), ("edificio", (520, 690), 14, rgb(120, 150, 200)),
-                      ("edificio", (478, 695), 12, rgb(225, 185, 205)),
-                      ("parque", ((285, 650), (445, 778)), 700), ("lago", (382, 722), (60.0, 22.0)),
-                      ("caja_agua", (445, 600)), ("catedral", (500, 532)), ("rio", (470, 500), (470, 404), -1)],
+           landmarks=["jardin", "feria", ("edificio", "cruzroja", 13, rgb(235, 235, 235)),
+                      ("edificio", "politecnica", 14, rgb(120, 150, 200)),
+                      ("edificio", "hospital", 12, rgb(225, 185, 205)),
+                      ("edificio", "citadina", 9, rgb(230, 225, 215)), "catedral", "cajadelagua"],
            signs={1: ((20, 60, 140), (40, 100, 200), "SAN LUIS POTOSÍ", (255, 255, 255)),
                   2: ((200, 30, 40), (240, 60, 60), "FERIA DE LA ENCHILADA", (255, 220, 60)),
                   7: ((230, 120, 20), (255, 160, 40), "ENCHILADAS POTOSINAS", (255, 255, 255)),
@@ -2223,6 +2220,7 @@ _OSM_DATA = {}
 CORNER_SIGNS = [6, 6, 5, 15, 7, 4, 8, 13]       # OXXO (2x), SIMI, tacos, Bimbo, Bodega, gas, CDMX
 POI_SIGN = {"convenience": 6, "pharmacy": 5, "chemist": 5, "restaurant": 15, "fast_food": 15, "bakery": 7,
             "supermarket": 4, "fuel": 8, "cafe": 15, "butcher": 15, "greengrocer": 4}
+M_FENCE_ = hd.M_FENCE
 SIDEWALK = {0: 0.0, 1: 4.5, 2: 4.0, 3: 3.6, 4: 3.0, 5: 2.6, 6: 2.3, 7: 2.0, 8: 1.8, 9: 2.3, 10: 1.5, 11: 1.5,
             12: 1.5, 13: 1.5, 14: 1.5, 15: 1.5}
 
@@ -2246,7 +2244,10 @@ class OSMTrack(MapTrack):
         self._setup(self.ctrl.copy())
         self.sand[:] = False
         n = self.n
-        self.rw = np.array(d["rw"], float)
+        self.rw = np.maximum(np.array(d["rw"], float), 4.5)     # minimo 9 m de asfalto para 6 coches
+        offa = np.abs(np.array(d["off"], float))
+        wide = np.convolve((offa > 0.4).astype(float), np.ones(21), "same") > 0
+        self.rw[wide] = np.maximum(self.rw[wide], 5.5)          # puentes y deprimidos: 11 m
         self.h = np.array(d["h"], float)
         self.hg = np.array(d["hg"], float)
         self.off = np.array(d["off"], float)
@@ -2263,6 +2264,23 @@ class OSMTrack(MapTrack):
         cp = self.find_crossings()
         self.cross_pts = cp
         self.cross_flat = [(a, b, c) for a, b, c in cp if abs(self.h[a] - self.h[b]) < 3.0]
+
+    def nearest_dist(self, q):
+        """Distancia a la ruta (rapida: indice por celdas; lejos de la ruta basta una aproximacion)."""
+        q = np.asarray(q, float).reshape(-1, 2)
+        if not hasattr(self, "_rg"):
+            self._rg = route_grid(self, 16.0)
+            self._coarse = self.pts[::6].astype(np.float32)
+        _, _, d = nearest_route(self, self._rg, q, 48.0)
+        far = d > 1e8
+        if far.any():
+            Q = q[far].astype(np.float32)
+            out = np.empty(len(Q), np.float32)
+            for a in range(0, len(Q), 1024):
+                c = Q[a:a + 1024]
+                out[a:a + 1024] = np.sqrt(((c[:, None, :] - self._coarse[None]) ** 2).sum(-1).min(1))
+            d[far] = out
+        return d
 
     def h_at(self, u):
         f = (u % self.L) / self.spacing
@@ -2285,7 +2303,8 @@ class OSMTrack(MapTrack):
             t = np.clip((px * d[:, 0] + pz * d[:, 1]) * self.inv_len2[w], 0, 1)
             ex, ez = px - d[:, 0] * t, pz - d[:, 1] * t
             e2 = ex * ex + ez * ez
-            k = int(np.argmin(e2))
+            # se prefiere seguir en el mismo tramo: un puente encima de la propia ruta no 'atrapa' al coche
+            k = int(np.argmin(e2 + ((np.arange(-30, 90) * self.spacing) * 0.15) ** 2))
             if e2[k] < (3 * LIMIT) ** 2:
                 i = int(w[k])
                 nx, nz = self.nrm[i]
@@ -2298,15 +2317,11 @@ class OSMTrack(MapTrack):
         sg = 1.0 if lat >= 0 else -1.0
         w = float(self.wpos[i] if lat >= 0 else self.wneg[i])
         u = abs(lat)
+        if car is not None and hasattr(car, "idx"):
+            car.true_lat = lat                     # el piso (asfalto / banqueta) se decide con la distancia real
         b1 = w - 3.2
-        a1 = min(self.rw[i] + 0.3, b1 - 0.2)
         L0 = LIMIT
-        if u <= a1:
-            v = u * (HW + CURB_W) / a1
-        elif u <= b1:
-            v = (HW + CURB_W) + (u - a1) * (L0 - 3.2 - HW - CURB_W) / max(b1 - a1, 1e-3)
-        else:
-            v = u - (w - L0)
+        v = u * (L0 - 3.2) / b1 if u <= b1 else u - (w - L0)
         return s, i, sg * v, cx + nx * sg * (w - L0), cz + nz * sg * (w - L0), nx, nz
 
 
@@ -2314,11 +2329,29 @@ class Terrain:
     """Altura del suelo en cualquier punto (interpolada de la altura real a lo largo de la ruta)."""
 
     def __init__(self, track):
-        k = max(1, track.n // 1400)
+        k = max(1, track.n // 700)
         self.P = track.pts[::k].astype(np.float32)
-        self.H = track.hg[::k].astype(np.float32)
+        src = (track.h - track.off) if hasattr(track, "off") else track.hg   # el suelo sigue al camino (sin puentes)
+        self.H = src[::k].astype(np.float32)
+
+        lo, hi = track.pts.min(0) - 700, track.pts.max(0) + 700
+        self.c0, self.cs = lo, 40.0
+        nx, nz = int((hi[0] - lo[0]) / 40) + 2, int((hi[1] - lo[1]) / 40) + 2
+        gx, gz = np.meshgrid(lo[0] + np.arange(nx) * 40.0, lo[1] + np.arange(nz) * 40.0, indexing="ij")
+        self.grid = self._idw(np.column_stack([gx.ravel(), gz.ravel()])).reshape(nx, nz)
 
     def __call__(self, Q):
+        """Altura (interpolacion bilineal en una malla de 25 m)."""
+        Q = np.asarray(Q, float).reshape(-1, 2)
+        fx = np.clip((Q[:, 0] - self.c0[0]) / self.cs, 0, self.grid.shape[0] - 1.001)
+        fz = np.clip((Q[:, 1] - self.c0[1]) / self.cs, 0, self.grid.shape[1] - 1.001)
+        ix, iz = fx.astype(int), fz.astype(int)
+        tx, tz = fx - ix, fz - iz
+        G = self.grid
+        return ((G[ix, iz] * (1 - tx) + G[ix + 1, iz] * tx) * (1 - tz) +
+                (G[ix, iz + 1] * (1 - tx) + G[ix + 1, iz + 1] * tx) * tz).astype(np.float32)
+
+    def _idw(self, Q):
         Q = np.asarray(Q, np.float32).reshape(-1, 2)
         out = np.empty(len(Q), np.float32)
         for a in range(0, len(Q), 1024):
@@ -2631,20 +2664,22 @@ def build_world_osm(track, md):
     conc, conc2 = rgb(176, 174, 168), rgb(150, 148, 142)
     for side in (-1, 1):
         for r in hd.runs(elev):
-            e = rw[r] + 0.6
-            road_ribbon(g, track, r, np.array([rw[r], rw[r], e, e]) * side,
+            e = rw[r] + 1.6
+            road_ribbon(g, track, r, np.array([rw[r], rw[r] + 1.0]) * side, (h[r] + 0.06)[None, :],
+                        rgb(64, 64, 68), mat(M_CONC, 0.8))
+            road_ribbon(g, track, r, np.array([rw[r] + 1.0, rw[r] + 1.0, e, e]) * side,
                         np.array([h[r] + 0.06, h[r] + 0.95, h[r] + 0.95, h[r] - 1.25]), conc, mat(M_CONC, 0.8))
         for r in hd.runs(elev & ~track.br):                               # terraplen: muro hasta el suelo
-            e = rw[r] + 0.6
+            e = rw[r] + 1.6
             road_ribbon(g, track, r, np.array([e, e]) * side, np.array([h[r] - 1.2, T(pts[r]) - 0.6]), conc2,
                         mat(M_CONC, 0.85))
         for r in hd.runs(sunkm):                                          # deprimido: muros de contencion
-            e = rw[r] + 0.6
+            e = rw[r] + 1.6
             top = np.maximum(T(pts[r]) + 1.0, h[r] + 1.0)
             road_ribbon(g, track, r, np.array([rw[r], e, e, e + 0.6]) * side,
                         np.array([h[r] + 0.06, h[r] + 0.06, top, top]), conc2, mat(M_CONC, 0.85))
     for r in hd.runs(elev & track.br):                                    # puente: losa y VIGAS a la vista
-        e = rw[r] + 0.6
+        e = rw[r] + 1.6
         road_ribbon(g, track, r, np.array([-e, e]), (h[r] - 1.25)[None, :], conc2, mat(M_CONC, 0.8),
                     orient=(0, -1, 0))
         nb = 5
@@ -2666,7 +2701,7 @@ def build_world_osm(track, md):
                 fcyl(g, q[0], q[1], yg - 1.0, y_top - 1.1, 0.75, conc, mat(M_CONC, 0.8), seg=12, cap=False)
         for k in r[::12]:
             for side in (-1, 1):
-                q = pts[k] + nrm[k] * side * (rw[k] + 0.45)
+                q = pts[k] + nrm[k] * side * (rw[k] + 1.45)
                 fcyl(g, q[0], q[1], h[k] + 0.95, h[k] + 9.0, 0.11, rgb(85, 92, 98), mat(M_METAL, 0.45, 0.8), seg=6)
                 q2 = q - nrm[k] * side * 2.2
                 fbox(g, q2, tan[k], 0.5, 0.25, h[k] + 8.75, h[k] + 9.0, (1.0, 0.78, 0.45), mat(M_LAMP, 0.5, 0, 7.0),
@@ -2892,8 +2927,8 @@ def build_world_osm(track, md):
         wall[mouth[:, sidx]] = np.maximum(wall[mouth[:, sidx]], rw[mouth[:, sidx]] + 4.5)
         wall[:] = np.minimum.reduce([np.roll(wall, q) for q in (-1, 0, 1)])
         wall[:] = np.clip(wall, rw + 1.2, rw + 14.0)
-        wall[off > 0.4] = rw[off > 0.4] + 0.45
-        wall[off < -0.4] = rw[off < -0.4] + 0.45
+        wall[off > 0.4] = rw[off > 0.4] + 1.4                       # acotamiento + parapeto
+        wall[off < -0.4] = rw[off < -0.4] + 1.4
     # camellones: otra calzada paralela muy cerca de un lado
     for side, wall in ((1, wpos), (-1, wneg)):
         par = np.zeros(n)
@@ -2941,9 +2976,12 @@ def build_world_osm(track, md):
                 valla[[(k + q) % n for q in range(ln_)], sidx] = True
             k += ln_ + rnd.randint(5, 40)
     for sidx, wall in ((1, wpos), (0, wneg)):
-        m = valla[:, sidx] & (wall > rw + 2.6) & (np.abs(off) < 0.4) & ~mouth[:, sidx]
+        m = valla[:, sidx] & (wall > rw + 3.0) & (np.abs(off) < 0.4) & ~mouth[:, sidx]
         valla[:, sidx] = m
-        wall[m] = rw[m] + 0.9
+        wall[m] = rw[m] + 1.3
+    for wall in (wpos, wneg):                                             # la pared se angosta poco a poco
+        for _ in range(8):
+            wall[:] = np.maximum.reduce([wall, np.roll(wall, 1) - 0.5, np.roll(wall, -1) - 0.5])
     for sidx, wall in ((1, wpos), (0, wneg)):                             # banquetas con su guarnicion
         side = 1 if sidx else -1
         ok = (np.abs(off) < 0.4) & ~mouth[:, sidx]
@@ -2953,29 +2991,28 @@ def build_world_osm(track, md):
                         np.array([h[r] + 0.06, h[r] + 0.19, h[r] + 0.19, h[r] + 0.19, T(pts[r]) - 0.6]),
                         rgb(178, 174, 166), mat(M_CONC, 0.85))
         for r in hd.runs(mouth[:, sidx] & (np.abs(off) < 0.4)):          # bocacalle: vallas que la cierran
-            for k in r[::2]:
-                q = pts[k] + nrm[k] * side * (rw[k] + 4.5)
-                fbox(g, q, tan[k], track.spacing, 0.06, h[k], h[k] + 1.1, rgb(150, 155, 160),
-                     mat(M_METAL, 0.4, 0.7))
+            road_ribbon(g, track, r, np.array([rw[r] + 4.5, rw[r] + 4.5]) * side, np.array([h[r], h[r] + 1.2]),
+                        rgb(150, 155, 160), mat(M_FENCE_, 0.4, 0.8))
             for k in r[::3]:                                              # gente que mira desde la bocacalle
                 for _ in range(rnd.randint(2, 6)):
                     q = pts[k] + nrm[k] * side * rnd.uniform(rw[k] + 5.0, rw[k] + 9.0) + tan[k] * rnd.uniform(-2, 2)
                     crowd.add(q[0], h[k] + 0.05, q[1], -nrm[k, 0] * side, -nrm[k, 1] * side, rnd)
         for r in hd.runs(valla[:, sidx]):                                 # vallas con aficionados
-            for k in r:
-                q = pts[k] + nrm[k] * side * (rw[k] + 0.9)
-                fbox(g, q, tan[k], track.spacing / 2, 0.05, h[k] + 0.19, h[k] + 1.25, rgb(150, 155, 160),
-                     mat(M_METAL, 0.4, 0.7))
+            road_ribbon(g, track, r, np.array([rw[r] + 1.3, rw[r] + 1.3]) * side,
+                        np.array([h[r] + 0.19, h[r] + 1.3]), rgb(150, 155, 160), mat(M_FENCE_, 0.4, 0.8),
+                        uv_scale=None)
+            road_ribbon(g, track, r, np.array([rw[r] + 1.27, rw[r] + 1.33]) * side, (h[r] + 1.3)[None, :],
+                        rgb(120, 125, 130), mat(M_METAL, 0.4, 0.7))
             for k in r[::2]:
                 far = min(fac[sidx][k], rw[k] + 0.3 + max(sw_des[k], 1.0) + 1.5) - 0.4
                 for _ in range(rnd.randint(2, 5)):
-                    lt = rnd.uniform(rw[k] + 1.3, max(rw[k] + 1.4, far))
+                    lt = rnd.uniform(rw[k] + 1.7, max(rw[k] + 1.8, far))
                     q = pts[k] + nrm[k] * side * lt + tan[k] * rnd.uniform(-1.5, 1.5)
                     crowd.add(q[0], h[k] + 0.19, q[1], -nrm[k, 0] * side, -nrm[k, 1] * side, rnd)
         for k in range(4, n, 13):                                         # postes de luz en la orilla
             if abs(off[k]) > 0.4 or mouth[k, sidx]:
                 continue
-            q = pts[k] + nrm[k] * side * (rw[k] + 0.45 if not valla[k, sidx] else rw[k] + 0.7)
+            q = pts[k] + nrm[k] * side * (rw[k] + 0.45 if not valla[k, sidx] else rw[k] + 1.6)
             fcyl(g, q[0], q[1], h[k] + 0.19, h[k] + 9.5, 0.13, rgb(85, 92, 98), mat(M_METAL, 0.45, 0.8), seg=6, r1=0.09)
             tip = q - nrm[k] * side * 2.6
             cylinder(g, (q[0], h[k] + 9.3, q[1]), (tip[0], h[k] + 9.7, tip[1]), 0.07, rgb(85, 92, 98),
@@ -2999,8 +3036,6 @@ def build_world_osm(track, md):
             tg = Geo()
             semaforo_hd(tg, sb, -nrm[k] * side, max(2.0, rw[k] * 0.9), -tan[k])
             g.merge(lift_geo(tg, h[k] + 0.19))
-            wall = wpos if side > 0 else wneg
-            wall[k] = min(wall[k], rw[k] + 0.75)                          # el poste se puede chocar
     # ---------------------------------------------------------------- manzanas de la ciudad (relleno de bloques)
     fill = 240.0
     st_ = 26.0
@@ -3029,6 +3064,7 @@ def build_world_osm(track, md):
         if dist < 120 and rnd.random() < 0.5:
             fcyl(g, c[0] + w_ * 0.4, c[1], yb + hh, yb + hh + 1.4, 0.62, rgb(22, 22, 24), mat(M_DEF, 0.6), seg=8)
     # ---------------------------------------------------------------- parques, agua, rios y arboles
+    park_budget = [500]
     for a in d.get("areas", []):
         k = a["k"]
         P = np.array(a["p"], float)
@@ -3051,7 +3087,8 @@ def build_world_osm(track, md):
         if k in ("park", "garden", "forest", "wood", "recreation_ground"):
             mn, mx = P.min(0), P.max(0)
             area = 0.5 * abs(np.dot(P[:-1, 0], P[1:, 1]) - np.dot(P[1:, 0], P[:-1, 1]))
-            cnt = int(min(220, area / 260))
+            cnt = int(min(60, area / 400, max(0, park_budget[0])))
+            park_budget[0] -= cnt
             if cnt <= 0:
                 continue
             TP = np.column_stack([np.array([rnd.uniform(mn[0], mx[0]) for _ in range(cnt * 3)]),
@@ -3096,7 +3133,7 @@ def build_world_osm(track, md):
             grid(g, PP[[0, 1]], rgb(160, 156, 148), mat(M_CONC, 0.85))
             grid(g, PP[[2, 3]], rgb(160, 156, 148), mat(M_CONC, 0.85))
             grid(g, PP[[1, 2]], rgb(40, 100, 125), mat(M_DEF, 0.1, 0.0), orient=(0, 1, 0))
-    trees = np.array(d.get("trees", []), float).reshape(-1, 2)
+    trees = np.array(d.get("trees", []), float).reshape(-1, 2)[:350]
     if len(trees):
         ti, tl_, td = nearest_route(track, rg, trees, 30)
         ty = T(trees)
@@ -3442,7 +3479,18 @@ class GameMaps(hd.GameHD):
             keep_radius = 1300.0
             if tr is not None and self.md.builder != "cdmx":
                 keep_radius = max(1300.0, float(np.max(np.hypot(*(tr.pts - tr.center).T))) + 900.0)
-        return ORIG_CHUNKS(R, arr, center, keep_radius)
+        ch = ORIG_CHUNKS(R, arr, center, keep_radius)
+        if self.md.osm:                                   # ciudad real: se dibuja hasta 1.2 km (la bruma tapa el resto)
+            orig_vis = ch.visible
+            ch.visible = lambda eye, fwd, cosl, maxd, _o=orig_vis: _o(eye, fwd, cosl, min(maxd, 1200.0))
+        return ch
+
+    def tod_params(self):
+        p = super().tod_params()
+        if self.md.osm:
+            p = dict(p)
+            p["fog_den"] = p["fog_den"] * 2.4
+        return p
 
     def apply_signs(self, md, upload=True):
         """Letreros propios del mapa (nombre del estadio, banda...) en el atlas de texturas."""
@@ -3768,7 +3816,38 @@ class GameMaps(hd.GameHD):
                     self.net.last_rx = time.time()
                 return
         super().update(rdt)
+        tr = self.track
+        if isinstance(tr, OSMTrack):                       # asfalto o banqueta segun la distancia real
+            for c in self.cars:
+                if not getattr(c, "remote", False) and hasattr(c, "true_lat"):
+                    c.surface = 0 if abs(c.true_lat) < tr.rw[c.idx % tr.n] + 0.4 else 1
+                    # bot atorado contra una pared: se echa en reversa hacia el centro de la calle
+                    if self.state == "race" and not c.is_player and not c.finished:
+                        c._slow_t = getattr(c, "_slow_t", 0.0) + rdt if abs(c.vf) < 3.0 else 0.0
+                        if c._slow_t > 2.5 and c.reverse_t <= 0:
+                            c.reverse_t, c._slow_t = 1.1, 0.0
+                            c.rec_steer = float(getattr(c, "steer", 0.0))
         self.map_extras(rdt)
+
+    def new_race(self, *a, **k):
+        super().new_race(*a, **k)
+        self._fix_grid()
+
+    def new_race_mp(self, order):
+        super().new_race_mp(order)
+        self._fix_grid()
+
+    def _fix_grid(self):
+        tr = self.track
+        if not isinstance(tr, OSMTrack):
+            return
+        for c in self.cars:
+            sg = tr.L - 10 - (c.slot // 2) * 12
+            c.idx = int(sg / tr.spacing) % tr.n
+            c.s = c.s_new = sg
+            c.u = sg - tr.L
+            c.lap_idx = math.floor(c.u / tr.L)
+            c.true_lat = 0.0
 
     def map_extras(self, rdt):
         """Fuegos artificiales por toda la ruta (noche) y rampas de turbo."""
@@ -3834,6 +3913,9 @@ class GameMaps(hd.GameHD):
         self.txt(f"{km}  ·  {m.subtitle}", 15, (200, 210, 225), (x + 42, y + 72), italic=False)
         if can_change:
             self.txt(f"Q / E  cambiar pista  ({self.map_sel + 1}/{len(MAPS)})", 14, ORANGE, (x + 500, y + 10), "topright",
+                     italic=False)
+        if m.osm:
+            self.txt("Calles reales · datos © colaboradores de OpenStreetMap", 12, (150, 165, 180), (x + 42, y + 94),
                      italic=False)
 
     def hud_select(self):
