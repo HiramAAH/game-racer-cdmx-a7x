@@ -161,6 +161,9 @@ SLP_ROUTE = [
     (488, 393), (530, 390), (575, 388), (640, 382), (660, 352), (680, 320), (700, 287), (716, 255), (722, 235),
     (731, 216), (746, 206), (760, 214), (758, 238)]
 
+CARNAVAL_SHIRTS = [rgb(230, 40, 140), rgb(250, 200, 20), rgb(30, 190, 200), rgb(130, 40, 190), rgb(250, 120, 30),
+                   rgb(40, 200, 90), rgb(255, 255, 255)]
+
 # Cozumel (trazo del usuario, escala compacta): centro de San Miguel, costa oriente, Punta Sur y costa poniente
 COZUMEL_ROUTE = [(348, 96), (365, 103), (380, 92), (400, 100), (425, 128), (460, 140), (500, 175), (540, 215),
                  (580, 250), (620, 290), (655, 318), (658, 345), (630, 370), (600, 405), (575, 440), (555, 460),
@@ -231,12 +234,13 @@ MAPS = [
                   2: ((10, 90, 50), (30, 140, 80), "PERIFÉRICO SUR", (255, 255, 255)),
                   9: ((200, 0, 110), (240, 40, 150), "CDMX", (255, 255, 255))},
            music_dir="music"),
-    MapDef("cozumel", "ISLA DE COZUMEL", "Caribe mexicano · selva, mar y carnaval",
-           control=COZUMEL_ROUTE, scale=6.5, laps=1, concert=True, builder="calles", urban=True,
-           ped_bridges=2, fans=0.6, extras=("papel",), fireworks=True, volcanoes=False, mountains=False,
-           tropical=dict(town=(355, 110, 75)), city_margin=250.0,
+    MapDef("cozumel", "ISLA DE COZUMEL", "Caribe mexicano · vuelta a la isla real · selva, mar y carnaval",
+           control=COZUMEL_ROUTE, scale=6.5, laps=1, concert=True, builder="osm", osm="cozumel", urban=True,
+           fans=0.9, extras=("papel",), fireworks=True, volcanoes=False, mountains=False,
+           tropical=dict(lm="plaza", r=2600.0), palette=CARNAVAL_SHIRTS,
            venue=dict(name="SAN MIGUEL DE COZUMEL", band="CARNAVAL DE COZUMEL", tag="¡A BAILAR!",
-                      pos=(395, 145), r0=45, kind="fanfest"),
+                      lm="start", at=90, side=1, r0=45, kind="fanfest", carnaval=True),
+           landmarks=["fanfest"],
            signs={1: ((0, 150, 170), (40, 200, 210), "COZUMEL", (255, 255, 255)),
                   9: ((230, 60, 140), (250, 120, 40), "¡VIVA EL CARNAVAL!", (255, 255, 255)),
                   10: ((120, 20, 160), (230, 60, 140), "CARNAVAL DE COZUMEL", (255, 230, 60)),
@@ -244,6 +248,12 @@ MAPS = [
            band_sign=10, music_dir="music_feria"),
     # --- aqui van las pistas nuevas ---
 ]
+# los mapas reales cuyo archivo todavia no se genera (python gtc_mapas_osm.py <mapa>) no aparecen en el selector
+_faltan = [m for m in MAPS if m.osm and not os.path.exists(os.path.join(hd.HERE, "mapas_osm", m.osm + ".json.gz"))]
+for _m in _faltan:
+    print(f"(aviso) falta mapas_osm/{_m.osm}.json.gz: el mapa '{_m.name}' se omite "
+          f"(generalo con: python gtc_mapas_osm.py {_m.osm})")
+MAPS = [m for m in MAPS if m not in _faltan]
 
 # Plantilla (NO esta en MAPS). Copiala, cambia los datos y agregala a la lista de arriba.
 PLANTILLA_DE_MAPA = MapDef(
@@ -827,13 +837,13 @@ def palm_hd(g, x, z, s, rnd, lean=None):
     """Palmera: tronco curvo e inclinado y penacho de hojas."""
     a = rnd.uniform(0, TAU) if lean is None else lean
     dx, dz = math.cos(a), math.sin(a)
-    pts_ = [(x + dx * (t * t) * 2.2 * s, t * 8.5 * s, z + dz * (t * t) * 2.2 * s) for t in np.linspace(0, 1, 5)]
+    pts_ = [(x + dx * (t * t) * 2.2 * s, t * 8.5 * s, z + dz * (t * t) * 2.2 * s) for t in np.linspace(0, 1, 4)]
     for (x0, y0, z0), (x1, y1, z1) in zip(pts_[:-1], pts_[1:]):
-        cylinder(g, (x0, y0, z0), (x1, y1, z1), 0.22 * s, rgb(130, 105, 75), mat(M_BARK, 0.9), seg=5, caps=False)
+        cylinder(g, (x0, y0, z0), (x1, y1, z1), 0.22 * s, rgb(130, 105, 75), mat(M_BARK, 0.9), seg=4, caps=False)
     tx, ty, tz = pts_[-1]
     leaf = rgb(*[int(v * rnd.uniform(0.85, 1.1)) for v in (40, 120, 45)])
-    for k in range(7):
-        b = k / 7 * TAU + rnd.uniform(-0.2, 0.2)
+    for k in range(6):
+        b = k / 6 * TAU + rnd.uniform(-0.2, 0.2)
         ux, uz = math.cos(b), math.sin(b)
         px, pz = -uz, ux
         L = 3.6 * s
@@ -842,7 +852,134 @@ def palm_hd(g, x, z, s, rnd, lean=None):
         w = 0.55 * s
         quad(g, (tx, ty, tz), (mx + px * w, my, mz + pz * w), (ex, ey, ez), (mx - px * w, my, mz - pz * w), leaf,
              mat(M_LEAF, 0.8))
-    sphere(g, (tx, ty - 0.3 * s, tz), 0.35 * s, rgb(110, 80, 40), mat(M_DEF, 0.7), seg=6, rings=3)
+    fbox(g, (tx, tz), (1, 0), 0.35 * s, 0.35 * s, ty - 0.7 * s, ty, rgb(110, 80, 40), mat(M_DEF, 0.7))
+
+
+def jungle_tree(g, x, z, s, rnd):
+    """Arbol de selva baja (chacah, chicozapote, ceiba): copa ancha y verde intenso."""
+    r_ = rnd.random()
+    leaf = rgb(*[int(v * rnd.uniform(0.8, 1.15)) for v in ((28, 92, 34) if r_ < 0.55 else (52, 118, 38))])
+    if r_ < 0.15:                                                         # ceiba alta
+        fcyl(g, x, z, 0, 9.5 * s, 0.4 * s, rgb(150, 140, 120), mat(M_BARK, 0.9), seg=4, r1=0.28 * s, cap=False)
+        sphere(g, (x, 10.5 * s, z), 4.2 * s, leaf, mat(M_LEAF, 0.8), seg=6, rings=3, scale=(1, 0.42, 1))
+    else:
+        fcyl(g, x, z, 0, 2.8 * s, 0.24 * s, rgb(96, 76, 56), mat(M_BARK, 0.9), seg=4, r1=0.16 * s, cap=False)
+        sphere(g, (x, 3.9 * s, z), 2.7 * s, leaf, mat(M_LEAF, 0.8), seg=6, rings=3, scale=(1, 0.78, 1))
+
+
+def trop_tree(g, x, z, s, rnd):
+    """Arbol de camellon o parque en el Caribe: palmera o arbol de selva."""
+    if rnd.random() < 0.6:
+        palm_hd(g, x, z, s * 0.9, rnd)
+    else:
+        jungle_tree(g, x, z, s, rnd)
+
+
+def palapa_hd(g, x, z, rnd):
+    """Sombrilla de palma en la playa."""
+    fcyl(g, x, z, 0, 2.6, 0.08, rgb(120, 95, 65), mat(M_BARK, 0.9), seg=5)
+    fcyl(g, x, z, 2.3, 3.4, 2.1, rgb(196, 160, 96), mat(M_GRAVEL, 0.95), seg=9, r1=0.1)
+
+
+def cruise_ship_hd(g, c, f, L, y0, lights):
+    """Crucero atracado frente a San Miguel."""
+    f = np.asarray(f, float) / np.linalg.norm(f)
+    o = np.array([-f[1], f[0]])
+    W = L * 0.13
+    white, blue = rgb(245, 246, 248), rgb(20, 50, 120)
+    fbox(g, c, f, L / 2, W / 2, y0 - 4, y0 + 10, white, mat(M_CONC, 0.5), bottom=True)
+    fbox(g, c + f * (L / 2 + 9), f, 9, W * 0.3, y0 - 4, y0 + 10, white, mat(M_CONC, 0.5), bottom=True)
+    fbox(g, c, f, L / 2 + 0.1, W / 2 + 0.1, y0 + 1, y0 + 3, blue, mat(M_CONC, 0.5))
+    for k in range(7):
+        fbox(g, c - f * (L * 0.03 + k * 2), f, L / 2 * (0.9 - 0.04 * k), W / 2 * 0.94, y0 + 10 + k * 3.1,
+             y0 + 13.1 + k * 3.1, white if k % 2 == 0 else rgb(150, 190, 225), mat(M_WINDOWS, 0.4, 0.2))
+    fbox(g, c - f * L * 0.28, f, 9, W * 0.22, y0 + 32, y0 + 42, rgb(200, 30, 40), mat(M_CONC, 0.5))
+    for k in range(-3, 4):
+        q = c + f * (k * L / 8)
+        lights.append((float(q[0]), y0 + 24, float(q[1]), 60.0, 1.0, 0.9, 0.7, 3.0))
+
+
+def faro_hd(g, c, y0, lights):
+    """Faro Celarain (Punta Sur)."""
+    fbox(g, c, (1, 0), 6, 4, y0, y0 + 4, rgb(240, 236, 228), mat(M_CONC, 0.7), bottom=True)
+    fcyl(g, c[0], c[1], y0, y0 + 22, 2.2, rgb(245, 245, 245), mat(M_CONC, 0.6), seg=12, r1=1.6)
+    fcyl(g, c[0], c[1], y0 + 13, y0 + 16, 1.95, rgb(200, 40, 40), mat(M_CONC, 0.6), seg=12, r1=1.85)
+    fcyl(g, c[0], c[1], y0 + 22, y0 + 25, 1.3, (1.0, 0.9, 0.6), mat(M_LAMP, 0.4, 0, 9.0), seg=10)
+    fcyl(g, c[0], c[1], y0 + 25, y0 + 27, 1.6, rgb(200, 40, 40), mat(M_CONC, 0.6), seg=10, r1=0.2)
+    lights.append((float(c[0]), y0 + 24, float(c[1]), 90.0, 1.0, 0.9, 0.6, 5.0))
+
+
+def _steps_to(M, K):
+    """Pasos (de celda) hasta la celda True mas cercana, con tope K (distancia octagonal aprox.)."""
+    D = np.full(M.shape, K, np.int16)
+    cur = M.copy()
+    D[cur] = 0
+    for k in range(1, K):
+        nxt = cur.copy()
+        nxt[1:, :] |= cur[:-1, :]
+        nxt[:-1, :] |= cur[1:, :]
+        nxt[:, 1:] |= cur[:, :-1]
+        nxt[:, :-1] |= cur[:, 1:]
+        if k % 2 == 0:
+            nxt[1:, 1:] |= cur[:-1, :-1]
+            nxt[:-1, :-1] |= cur[1:, 1:]
+            nxt[1:, :-1] |= cur[:-1, 1:]
+            nxt[:-1, 1:] |= cur[1:, :-1]
+        D[nxt & ~cur] = k
+        cur = nxt
+        if cur.all():
+            break
+    return D
+
+
+class Coast:
+    """Tierra y mar a partir de la linea de costa de OSM: distancia con signo a la orilla (+ tierra, - mar)."""
+
+    def __init__(self, polys, lo, hi, res=25.0, K=40):
+        self.res, self.c0 = res, np.asarray(lo, float)
+        nx, nz = int((hi[0] - lo[0]) / res) + 1, int((hi[1] - lo[1]) / res) + 1
+        L = np.zeros((nx, nz), bool)
+        for P in polys:
+            A, B = P, np.roll(P, -1, 0)
+            for j in range(nz):                                           # relleno por renglones
+                z = lo[1] + (j + 0.5) * res
+                c = (A[:, 1] > z) != (B[:, 1] > z)
+                if not c.any():
+                    continue
+                xi = np.sort(A[c, 0] + (z - A[c, 1]) * (B[c, 0] - A[c, 0]) / (B[c, 1] - A[c, 1]))
+                for a, b in zip(xi[0::2], xi[1::2]):
+                    i0 = max(0, int(math.ceil((a - lo[0]) / res - 0.5)))
+                    i1 = min(nx - 1, int(math.floor((b - lo[0]) / res - 0.5)))
+                    if i1 >= i0:
+                        L[i0:i1 + 1, j] ^= True
+        self.land = L
+        self.D = np.where(L, _steps_to(~L, K), -_steps_to(L, K)).astype(np.float32) * res
+        self.lo_c = np.argwhere(L).min(0) * res + self.c0 if L.any() else self.c0
+        self.hi_c = np.argwhere(L).max(0) * res + self.c0 if L.any() else self.c0
+
+    def ds(self, Q):
+        Q = np.asarray(Q, float).reshape(-1, 2)
+        fx = np.clip((Q[:, 0] - self.c0[0]) / self.res - 0.5, 0, self.D.shape[0] - 1.001)
+        fz = np.clip((Q[:, 1] - self.c0[1]) / self.res - 0.5, 0, self.D.shape[1] - 1.001)
+        ix, iz = fx.astype(int), fz.astype(int)
+        tx, tz = fx - ix, fz - iz
+        G = self.D
+        return ((G[ix, iz] * (1 - tx) + G[ix + 1, iz] * tx) * (1 - tz) +
+                (G[ix, iz + 1] * (1 - tx) + G[ix + 1, iz + 1] * tx) * tz)
+
+
+def masked_grid(g, P, C, cells, m):
+    """Como grid() pero solo dibuja las celdas marcadas (P: (R, Cn, 3), cells: (R-1, Cn-1) bool)."""
+    P = np.asarray(P, F4)
+    dR, dC = np.gradient(P, axis=0), np.gradient(P, axis=1)
+    N = np.cross(dC, dR)
+    N /= np.maximum(np.linalg.norm(N, axis=-1, keepdims=True), 1e-9)
+    N = np.where((N[..., 1] < 0)[..., None], -N, N)
+    i, j = np.nonzero(cells)
+    ir = np.stack([i, i + 1, i + 1, i, i + 1, i], 1).ravel()
+    jc = np.stack([j, j, j + 1, j, j + 1, j + 1], 1).ravel()
+    V = P[ir, jc]
+    g.tris(V, N[ir, jc], np.asarray(C, F4)[ir, jc], m, V[:, [0, 2]] / 8.0)
 
 
 def forest_tree(g, x, z, s, rnd):
@@ -1377,6 +1514,33 @@ def museo_hd(g, c, f, lights):
     lights.append((float(tl[0]), 6.0, float(tl[1]), 40.0, 1.0, 0.85, 0.6, 3.0))
 
 
+def carroza_hd(g, c, f, k, lights):
+    """Carro alegorico del Carnaval de Cozumel: plataforma de colores, mascara gigante y abanicos de plumas."""
+    f = v2(f)
+    o = np.array([-f[1], f[0]])
+    cols = [(rgb(230, 40, 140), rgb(250, 200, 20), rgb(30, 190, 200)),
+            (rgb(130, 40, 190), rgb(250, 120, 30), rgb(40, 200, 90))][k % 2]
+    for a in (-1, 1):                                                          # llantas
+        for b in (-1, 1):
+            q = c + f * a * 5.0 + o * b * 2.6
+            fcyl(g, q[0], q[1], 0, 1.0, 0.5, rgb(20, 20, 22), mat(M_DEF, 0.6), seg=8)
+    fbox(g, c, f, 7.0, 3.0, 0.6, 2.0, cols[0], mat(M_DEF, 0.5, 0.1), bottom=True)
+    fbox(g, c - f * 1.0, f, 5.5, 2.6, 2.0, 3.4, cols[1], mat(M_DEF, 0.5, 0.1))
+    fbox(g, c - f * 2.0, f, 3.5, 2.2, 3.4, 4.6, cols[2], mat(M_DEF, 0.5, 0.1))
+    m = c + f * 3.0                                                            # mascara
+    sphere(g, (m[0], 6.8, m[1]), 2.6, cols[1], mat(M_DEF, 0.35, 0.3), seg=12, rings=8, scale=(1, 1.15, 0.8))
+    for sg in (-1, 1):
+        q = m + o * sg * 0.95 + f * 1.9
+        sphere(g, (q[0], 7.4, q[1]), 0.55, (1, 1, 1), mat(M_EMIS, 0.4, 0, 3.0), seg=8, rings=5)
+    for j in range(9):                                                         # plumas
+        a = (j - 4) / 4 * 1.2
+        tip = m + o * math.sin(a) * 6.5 - f * 0.8
+        quad(g, (m[0] - o[0] * 0.5, 8.0, m[1] - o[1] * 0.5), (m[0] + o[0] * 0.5, 8.0, m[1] + o[1] * 0.5),
+             (tip[0] + o[0] * 0.9, 8.0 + math.cos(a) * 7.5, tip[1] + o[1] * 0.9),
+             (tip[0] - o[0] * 0.9, 8.0 + math.cos(a) * 7.5, tip[1] - o[1] * 0.9), cols[j % 3], mat(M_EMIS, 0.5, 0, 1.6))
+    lights.append((float(m[0]), 10.0, float(m[1]), 30.0, 1.0, 0.4, 0.8, 3.0))
+
+
 def fanfest_hd(g, gc, crowd, rnd, track, sc, r0, md, info, lights):
     """Fan Fest mundialista: plaza, pantallas, escenario (de noche), copa y balon gigantes."""
     ang = np.linspace(0, TAU, 65)
@@ -1406,8 +1570,16 @@ def fanfest_hd(g, gc, crowd, rnd, track, sc, r0, md, info, lights):
         face_quad(g, q + tt * 0.65 - rr * 6.4, q + tt * 0.65 + rr * 6.4, 5.0, 15.4, (1, 1, 1),
                   mat(M_LED, 0.3, 0, 2.5), tt, ((0, 0), (1, 0), (1, 1), (0, 1)))
     tq, bq = sc + tt * (r0 - 14) - rr * 18, sc + tt * (r0 - 14) + rr * 18
-    trofeo_hd(g, tq[0], tq[1], 1.3, lights)
-    balon_hd(g, bq[0], 6.5, bq[1], 6.5)
+    if (md.venue or {}).get("carnaval"):                                      # carros alegoricos y palmeras
+        for k_, q in enumerate((tq, bq)):
+            carroza_hd(g, q, rr if k_ else -rr, k_, lights)
+        for k in range(10):
+            a = k / 10 * TAU + 0.3
+            q = sc + np.array([math.cos(a), math.sin(a)]) * (r0 + 1)
+            palm_hd(g, q[0], q[1], rnd.uniform(0.9, 1.15), rnd)
+    else:
+        trofeo_hd(g, tq[0], tq[1], 1.3, lights)
+        balon_hd(g, bq[0], 6.5, bq[1], 6.5)
     for k in range(5):                                                         # torres de luz
         a = math.atan2(tt[1], tt[0]) + (k + 0.5) / 5 * TAU
         q = sc + np.array([math.cos(a), math.sin(a)]) * (r0 + 4)
@@ -2756,6 +2928,9 @@ def route_grid(track, cell=12.0):
     return G, cell
 
 
+_NR_BLOCKS = {}
+
+
 def nearest_route(track, rg, Q, maxd=40.0):
     """Para cada punto: (indice de la muestra mas cercana, distancia lateral con signo, distancia) o -1."""
     G, cell = rg
@@ -2764,10 +2939,17 @@ def nearest_route(track, rg, Q, maxd=40.0):
     lat = np.zeros(len(Q))
     dist = np.full(len(Q), 1e9)
     r = int(math.ceil(maxd / cell))
+    B = 2 * r + 1
+    occB = _NR_BLOCKS.get((id(G), B))
+    if occB is None:                                                      # bloques con ruta (para saltar lo lejano)
+        occB = _NR_BLOCKS[(id(G), B)] = {(cx // B, cz // B) for cx, cz in G}
     cells = {}
     for k, (x, z) in enumerate(Q):
         cells.setdefault((int(x // cell), int(z // cell)), []).append(k)
     for (cx, cz), ks in cells.items():
+        bx, bz = cx // B, cz // B
+        if not any((bx + a, bz + b) in occB for a in (-1, 0, 1) for b in (-1, 0, 1)):
+            continue
         cand = []
         for dx in range(-r, r + 1):
             for dz in range(-r, r + 1):
@@ -2929,10 +3111,38 @@ def build_world_osm(track, md):
     occ, zones, openz = Occupancy(4.0), Zones(), Zones()
     cxm, czm = track.center
     lo, hi = pts.min(0) - 650, pts.max(0) + 650
+    trop = md.tropical is not None
+    town_m = np.ones(n, bool)
+    glo, ghi = lo, hi
+    if trop:                                                               # isla: tierra, mar y el pueblo
+        land_polys = []
+        for a in d.get("areas", []):
+            if a["k"] == "land" and len(a["p"]) > 20:
+                P_ = np.array(a["p"], float)
+                if inside_poly(P_, pts[::40]).mean() > 0.3:
+                    land_polys.append(P_)
+        allp = np.concatenate(land_polys) if land_polys else pts
+        coast = Coast(land_polys, np.minimum(allp.min(0), lo) - 3000, np.maximum(allp.max(0), hi) + 3000)
+        if not land_polys:
+            coast.D[:] = 999.0
+        ds_at = coast.ds
+        town_c = lm0.get(md.tropical.get("lm", "plaza"), pts[0])
+        town_r = float(md.tropical.get("r", 2300.0))
+
+        def in_town(Q):
+            Q = np.asarray(Q, float).reshape(-1, 2)
+            return np.hypot(Q[:, 0] - town_c[0], Q[:, 1] - town_c[1]) < town_r
+        town_m = in_town(pts)
+        hb0 = h - np.maximum(off, 0.0)
+        sea_y = float(np.percentile(hb0, 1)) - 1.6                         # nivel del mar
+        if land_polys:
+            glo = np.minimum(lo, allp.min(0) - 300)
+            ghi = np.maximum(hi, allp.max(0) + 300)
+        print(f"   isla: {len(land_polys)} costa(s), mar a y={sea_y:.1f}, pueblo {town_m.mean() * 100:.0f}% de la ruta")
     # ---------------------------------------------------------------- suelo con alturas reales
-    cell = 40.0
-    gx = np.arange(lo[0], hi[0] + cell, cell)
-    gz = np.arange(lo[1], hi[1] + cell, cell)
+    cell = 75.0 if trop else 40.0
+    gx = np.arange(glo[0], ghi[0] + cell, cell)
+    gz = np.arange(glo[1], ghi[1] + cell, cell)
     GX, GZ = np.meshgrid(gx, gz, indexing="ij")
     GQ = np.column_stack([GX.ravel(), GZ.ravel()])
     GY = T(GQ) - 0.35
@@ -2969,14 +3179,46 @@ def build_world_osm(track, md):
         tx_, tz_ = fx_ - ix_, fz_ - iz_
         return ((GY[ix_, iz_] * (1 - tx_) + GY[ix_ + 1, iz_] * tx_) * (1 - tz_) +
                 (GY[ix_, iz_ + 1] * (1 - tx_) + GY[ix_ + 1, iz_ + 1] * tx_) * tz_)
+    if trop:                                                               # playa que baja al mar
+        DS = ds_at(GQ).reshape(GX.shape)
+        GY[:] = np.where(DS < 45, np.minimum(GY, sea_y + 0.25 + np.maximum(DS, 0) * 0.045), GY)
+        GY[:] = np.where(DS < 0, np.minimum(GY, sea_y - 0.6 + np.maximum(DS, -400) * 0.02), GY)
     gmin = float(GY.min())
-    if md.ground == "bosque":
+    if trop:
+        nz_ = np.array([rnd.uniform(0.85, 1.12) for _ in range(997)])[(np.arange(GX.size) * 7919) % 997]
+        nz_ = nz_.reshape(GX.shape)[..., None]
+        sand, jung = np.array(rgb(228, 212, 168)), np.array(rgb(36, 74, 28))
+        tb = np.clip((DS - 18.0) / 50.0, 0, 1)[..., None]
+        CC = (sand * (1 - tb) + jung * tb * nz_).astype(np.float32)
+        cells_ = np.maximum.reduce([DS[:-1, :-1], DS[1:, :-1], DS[:-1, 1:], DS[1:, 1:]]) > -90
+        masked_grid(g, np.stack([GX, GY, GZ], -1), CC, cells_, mat(M_GRASS, 0.95))
+        # mar: turquesa en la orilla, azul profundo mar adentro
+        wx = np.arange(coast.c0[0], coast.c0[0] + coast.D.shape[0] * coast.res, 150.0)
+        wz = np.arange(coast.c0[1], coast.c0[1] + coast.D.shape[1] * coast.res, 150.0)
+        WX, WZ = np.meshgrid(wx, wz, indexing="ij")
+        WD = ds_at(np.column_stack([WX.ravel(), WZ.ravel()])).reshape(WX.shape)
+        tq, mid, deep = np.array(rgb(60, 205, 205)), np.array(rgb(25, 140, 180)), np.array(rgb(14, 62, 125))
+        a1 = np.clip(-WD / 260.0, 0, 1)[..., None]
+        a2 = np.clip((-WD - 260.0) / 600.0, 0, 1)[..., None]
+        WC = (tq * (1 - a1) + mid * a1) * (1 - a2) + deep * a2
+        wcell = np.maximum.reduce([WD[:-1, :-1], WD[1:, :-1], WD[:-1, 1:], WD[1:, 1:]]) > -1000
+        masked_grid(g, np.stack([WX, np.full_like(WX, sea_y), WZ], -1), WC.astype(np.float32), wcell,
+                    mat(M_DEF, 0.04, 0.35))
+        w0, w1 = np.array([wx[0], wz[0]]), np.array([wx[-1], wz[-1]])
+        quad_dir(g, (w0[0], sea_y - 0.04, w0[1]), (w1[0], sea_y - 0.04, w0[1]), (w1[0], sea_y - 0.04, w1[1]),
+                 (w0[0], sea_y - 0.04, w1[1]), tuple(deep), mat(M_DEF, 0.04, 0.35), (0, 1, 0))
+        G3 = 40000
+        for (x0, x1, z0, z1) in ((w0[0] - G3, w0[0], w0[1] - G3, w1[1] + G3), (w1[0], w1[0] + G3, w0[1] - G3, w1[1] + G3),
+                                 (w0[0], w1[0], w0[1] - G3, w0[1]), (w0[0], w1[0], w1[1], w1[1] + G3)):
+            quad_dir(g, (x0, sea_y, z0), (x1, sea_y, z0), (x1, sea_y, z1), (x0, sea_y, z1), tuple(deep), mat(M_DEF, 0.04, 0.35), (0, 1, 0))
+    elif md.ground == "bosque":
         grid(g, np.stack([GX, GY, GZ], -1), rgb(72, 110, 44), mat(M_GRASS, 0.95), orient=(0, 1, 0))
     else:
         grid(g, np.stack([GX, GY, GZ], -1), rgb(122, 118, 110), mat(M_CONC, 0.9), orient=(0, 1, 0))
     G2 = 7000
-    for (x0, x1, z0, z1) in ((cxm - G2, lo[0], czm - G2, czm + G2), (hi[0], cxm + G2, czm - G2, czm + G2),
-                             (lo[0], hi[0], czm - G2, lo[1]), (lo[0], hi[0], hi[1], czm + G2)):
+    for (x0, x1, z0, z1) in (() if trop else
+                             ((cxm - G2, lo[0], czm - G2, czm + G2), (hi[0], cxm + G2, czm - G2, czm + G2),
+                              (lo[0], hi[0], czm - G2, lo[1]), (lo[0], hi[0], hi[1], czm + G2))):
         quad_dir(g, (x0, gmin - 0.5, z0), (x1, gmin - 0.5, z0), (x1, gmin - 0.5, z1), (x0, gmin - 0.5, z1),
                  rgb(110, 108, 100), mat(M_CONC, 0.9), (0, 1, 0))
     yG = lambda x, z: float(T([(x, z)])[0])
@@ -3335,6 +3577,7 @@ def build_world_osm(track, md):
             fd = rw[i] + 0.3 + sw_des[i]
             bad = (np.abs(off[spi]).max() > 0.4 or mouth[spi, 1 if side > 0 else 0].any() or
                    np.isfinite(wall[spi]).any() or track.cls[i] <= 1 or track.cls[i] >= 10 or
+                   (trop and not town_m[i]) or
                    (park_polys and in_park(pts[i] + nrm[i] * side * (rw[i] + 8))[0]))
             if bad:
                 s += 3.0
@@ -3405,7 +3648,7 @@ def build_world_osm(track, md):
                 if rnd.random() < 0.7:
                     q = pts[k] + nrm[k] * side * (rw[k] + 0.5 + (far[0] - rw[k] - 0.5) * 0.5)
                     tg = Geo()
-                    (jacaranda_hd if rnd.random() < 0.5 else tree_hd)(tg, q[0], q[1], rnd.uniform(0.9, 1.3), rnd)
+                    (trop_tree if trop else jacaranda_hd if rnd.random() < 0.5 else tree_hd)(tg, q[0], q[1], rnd.uniform(0.9, 1.3), rnd)
                     g.merge(lift_geo(tg, h[k] + 0.25))
     for i in np.nonzero(track.partner >= 0)[0]:                           # la calzada vecina tambien es calle
         j = track.partner[i]
@@ -3425,7 +3668,7 @@ def build_world_osm(track, md):
         k = 0
         while k < n:
             ln_ = rnd.randint(15, 60)
-            if near_lm[k] or rnd.random() < md.fans * md.fan_rate:
+            if near_lm[k] or rnd.random() < md.fans * md.fan_rate * (1.0 if town_m[k] else 0.1):
                 valla[[(k + q) % n for q in range(ln_)], sidx] = True
             k += ln_ + (rnd.randint(2, 8) if md.fan_rate >= 0.9 else rnd.randint(5, 40))
     for sidx, wall in ((1, wpos), (0, wneg)):
@@ -3438,11 +3681,18 @@ def build_world_osm(track, md):
     for sidx, wall in ((1, wpos), (0, wneg)):                             # banquetas con su guarnicion
         side = 1 if sidx else -1
         ok = (np.abs(off) < 0.4) & ~mouth[:, sidx] & ~shared[:, sidx]
-        for r in hd.runs(ok):
+        for r in hd.runs(ok & town_m):
             sw_out = np.clip(fac[sidx][r], rw[r] + 0.6, rw[r] + 0.3 + np.maximum(sw_des[r], 1.0) + 1.5)
             road_ribbon(g, track, r, np.array([rw[r], rw[r], rw[r] + 0.3, sw_out, sw_out]) * side,
                         np.array([h[r] + 0.06, h[r] + 0.19, h[r] + 0.19, h[r] + 0.19, T(pts[r]) - 0.6]),
                         rgb(178, 174, 166), mat(M_CONC, 0.85))
+        for r in (hd.runs(ok & ~town_m) if trop else ()):                 # carretera: acotamiento de arena
+            sw_out = rw[r] + 2.6
+            road_ribbon(g, track, r, np.array([rw[r], sw_out, sw_out + 1.5]) * side,
+                        np.array([h[r] + 0.06, h[r] + 0.02, np.minimum(gh(pts[r]) + 0.05, h[r] - 0.1)]),
+                        rgb(204, 190, 150), mat(M_GRAVEL, 0.95))
+            road_ribbon(g, track, r, np.array([rw[r] - 0.45, rw[r] - 0.3]) * side, (h[r] + 0.078)[None, :],
+                        (0.95, 0.95, 0.95), mat(M_LINE, 0.55))
         for r in hd.runs(mouth[:, sidx] & (np.abs(off) < 0.4)):          # bocacalle: vallas que la cierran
             road_ribbon(g, track, r, np.array([rw[r] + 4.5, rw[r] + 4.5]) * side, np.array([h[r], h[r] + 1.2]),
                         rgb(150, 155, 160), mat(M_FENCE_, 0.4, 0.8))
@@ -3463,7 +3713,7 @@ def build_world_osm(track, md):
                     q = pts[k] + nrm[k] * side * lt + tan[k] * rnd.uniform(-1.5, 1.5)
                     crowd.add(q[0], h[k] + 0.19, q[1], -nrm[k, 0] * side, -nrm[k, 1] * side, rnd)
         for k in range(4, n, 13):                                         # postes de luz en la orilla
-            if abs(off[k]) > 0.4 or mouth[k, sidx] or shared[k, sidx]:
+            if abs(off[k]) > 0.4 or mouth[k, sidx] or shared[k, sidx] or (not town_m[k] and k % 39 != 4):
                 continue
             q = pts[k] + nrm[k] * side * (rw[k] + 0.45 if not valla[k, sidx] else rw[k] + 1.6)
             fcyl(g, q[0], q[1], h[k] + 0.19, h[k] + 9.5, 0.13, rgb(85, 92, 98), mat(M_METAL, 0.45, 0.8), seg=6, r1=0.09)
@@ -3514,8 +3764,9 @@ def build_world_osm(track, md):
     # ---------------------------------------------------------------- manzanas de la ciudad (relleno de bloques)
     fill = 240.0
     st_ = 26.0
-    ax_ = np.arange(lo[0] + 300, hi[0] - 300, st_)
-    az_ = np.arange(lo[1] + 300, hi[1] - 300, st_)
+    flo, fhi = (lo + 300, hi - 300) if not trop else (np.maximum(lo + 300, town_c - town_r), np.minimum(hi - 300, town_c + town_r))
+    ax_ = np.arange(flo[0], fhi[0], st_)
+    az_ = np.arange(flo[1], fhi[1], st_)
     FX, FZ = np.meshgrid(ax_, az_, indexing="ij")
     C = np.column_stack([FX.ravel(), FZ.ravel()]) + np.array([[rnd.uniform(-4, 4), rnd.uniform(-4, 4)]])
     Dr = track.nearest_dist(C)
@@ -3524,6 +3775,8 @@ def build_world_osm(track, md):
     blocked = zones.hit(C) | openz.hit(C)
     if park_polys:
         blocked |= in_park(C)
+    if trop:
+        blocked |= ~in_town(C) | (ds_at(C) < 20)
     CY = T(C)
     for c, dist, bl_, yb in zip(C, Dr, blocked, CY):
         if bl_:
@@ -3555,7 +3808,9 @@ def build_world_osm(track, md):
                "grass": rgb(86, 130, 56), "pitch": rgb(60, 130, 50), "forest": rgb(46, 90, 36),
                "wood": rgb(46, 90, 36), "recreation_ground": rgb(78, 122, 50), "cemetery": rgb(96, 120, 70),
                "playground": rgb(170, 140, 100), "meadow": rgb(96, 130, 60), "scrub": rgb(90, 110, 60)}.get(k)
-        if col is None:
+        if col is None or (trop and k in ("forest", "wood", "scrub", "meadow", "grass", "wetland")):
+            continue
+        if trop and not in_town(P).any() and k not in ("pitch",):
             continue
         mn_, mx_ = P.min(0), P.max(0)
         area_ = 0.5 * abs(np.dot(P[:-1, 0], P[1:, 1]) - np.dot(P[1:, 0], P[:-1, 1]))
@@ -3625,7 +3880,7 @@ def build_world_osm(track, md):
                     break
                 if ok_ and occ.free(occ.cells((x, z), (1, 0), 1.5, 1.5)):
                     tg = Geo()
-                    (jacaranda_hd if rnd.random() < 0.2 else tree_hd)(tg, x, z, rnd.uniform(1.0, 1.6), rnd)
+                    (trop_tree if trop else jacaranda_hd if rnd.random() < 0.2 else tree_hd)(tg, x, z, rnd.uniform(1.0, 1.6), rnd)
                     g.merge(lift_geo(tg, yt - 0.3))
                     placed_t += 1
     for wv in d.get("water", []):
@@ -3665,13 +3920,16 @@ def build_world_osm(track, md):
             if not occ.free(occ.cells((x, z), (1, 0), 1.0, 1.0)):
                 continue
             tg = Geo()
-            (jacaranda_hd if rnd.random() < 0.45 else tree_hd)(tg, x, z, rnd.uniform(0.9, 1.3), rnd)
+            (trop_tree if trop else jacaranda_hd if rnd.random() < 0.45 else tree_hd)(tg, x, z, rnd.uniform(0.9, 1.3), rnd)
             g.merge(lift_geo(tg, yt - 0.3))
+    if trop:
+        tropical_osm(g, track, md, rnd, lights, info, town_m, ds_at, gh, sea_y, wpos, wneg, mouth, shared,
+                     sidx_, bidx, occ, zones, rg, lm, town_c)
     # ---------------------------------------------------------------- salida, adornos, horizonte, montanas
     start_arch(g, track, info, lights)
     if "papel" in md.extras or "banderines" in md.extras:
         for k, i in enumerate(range(30, n, 70)):
-            if abs(off[i]) > 0.4:
+            if abs(off[i]) > 0.4 or not town_m[i]:
                 continue
             tg = Geo()
             pa, pb = pts[i] - nrm[i] * (rw[i] + 0.4), pts[i] + nrm[i] * (rw[i] + 0.4)
@@ -3681,7 +3939,7 @@ def build_world_osm(track, md):
                 papel_picado_hd(tg, pa, pb, h=7.2, rows=3)
             g.merge(lift_geo(tg, h[i]))
     span = float(np.max(hi - lo)) / 2
-    for _ in range(300):
+    for _ in range(0 if trop else 300):
         a = rnd.uniform(0, TAU)
         r = rnd.uniform(span + 200, span + 1800)
         x, z = cxm + r * math.cos(a), czm + r * math.sin(a)
@@ -3714,6 +3972,111 @@ def build_world_osm(track, md):
     if not gc.parts:
         quad(gc, (0, -500, 0), (0.1, -500, 0), (0.1, -500, 0.1), (0, -500, 0.1), (0, 0, 0), mat(0))
     return g, gc, crowd, lights, info
+
+
+def tropical_osm(g, track, md, rnd, lights, info, town_m, ds_at, gh, sea_y, wpos, wneg, mouth, shared,
+                 sidx_, bidx, occ, zones, rg, lm, town_c):
+    """Cozumel real: selva del lado de tierra, palmeras y palapas del lado del mar, cruceros y faro."""
+    pts, nrm, tan, n = track.pts, track.nrm, track.tan, track.n
+    rw, h, off = track.rw, track.h, track.off
+    step = max(1, int(round(15.0 / track.spacing)))
+    n_p = n_t = n_pa = 0
+
+    def free(q, need):
+        ii_, _, dd_ = nearest_route(track, rg, q[None], 40)
+        if ii_[0] >= 0 and dd_[0] < rw[ii_[0]] + need:
+            return False
+        return (not sidx_.hit(q[None], 1.5) and not bidx.inside(q[None], 1.0).any() and
+                occ.free(occ.cells(q, (1, 0), 1.2, 1.2)) and not zones.hit(q[None]).any())
+    noise = np.convolve(np.array([rnd.uniform(-1, 1) for _ in range(n)]), np.ones(5) / 5, "same") * 7.0
+    for side, wall in ((1, wpos), (-1, wneg)):
+        sx = 1 if side > 0 else 0
+        o = nrm * side
+        base = wall + 1.0
+        far = ds_at(pts + o * (base + 70)[:, None])
+        near = ds_at(pts + o * (base + 8)[:, None])
+        okk = ~town_m & (np.abs(off) < 0.4) & ~mouth[:, sx] & ~shared[:, sx]
+        beach = okk & (far < 30)
+        jung = okk & (far >= 30) & (near > 5)
+        # muro de selva (barato y tupido) detras de los arboles
+        L0 = base + 13.0
+        Qc = pts + o * (L0 + 25)[:, None]
+        clr = track.nearest_dist(Qc) > L0 + 10
+        canopy = jung & clr & (ds_at(pts + o * L0[:, None]) > 12)
+        canopy = np.convolve(canopy.astype(float), np.ones(7), "same") > 6
+        for r in hd.runs(canopy):
+            if len(r) < 10:
+                continue
+            r = np.append(r[:-1:4], r[-1])
+            Qa, Qb = pts[r] + o[r] * L0[r][:, None], pts[r] + o[r] * (L0[r] + 40)[:, None]
+            ya, yb = gh(Qa), gh(Qb)
+            top = np.maximum(ya, yb) + 9.0 + noise[r]
+            road_ribbon(g, track, r, np.stack([L0[r], L0[r] - 1.5, L0[r] + 6, L0[r] + 40]) * side,
+                        np.stack([ya - 0.8, top - 3.0, top, top - 1.0]), rgb(28, 74, 26), mat(M_LEAF, 0.85),
+                        orient=np.column_stack([-o[r, 0], np.full(len(r), 0.6), -o[r, 1]])[None])
+        for i in range(0, n, step):
+            if beach[i]:
+                for _ in range(2):
+                    if rnd.random() < 0.5:
+                        q = pts[i] + o[i] * rnd.uniform(base[i] + 2, base[i] + 34) + tan[i] * rnd.uniform(-4, 4)
+                        if ds_at(q)[0] < 4 or not free(q, 3.0):
+                            continue
+                        tg = Geo()
+                        if rnd.random() < 0.12:
+                            palapa_hd(tg, q[0], q[1], rnd)
+                            n_pa += 1
+                        else:
+                            palm_hd(tg, q[0], q[1], rnd.uniform(0.85, 1.3), rnd,
+                                    lean=math.atan2(o[i, 1], o[i, 0]) + rnd.uniform(-0.6, 0.6))
+                            n_p += 1
+                        g.merge(lift_geo(tg, float(gh(q)[0]) - 0.1))
+            elif jung[i]:
+                for _ in range(1 if rnd.random() < 0.6 else 2):
+                    lt = rnd.uniform(base[i] + 3, base[i] + 12)
+                    q = pts[i] + o[i] * lt + tan[i] * rnd.uniform(-4, 4)
+                    if ds_at(q)[0] < 6 or not free(q, 3.0):
+                        continue
+                    tg = Geo()
+                    if rnd.random() < 0.22:
+                        palm_hd(tg, q[0], q[1], rnd.uniform(0.8, 1.15), rnd)
+                        n_p += 1
+                    else:
+                        jungle_tree(tg, q[0], q[1], rnd.uniform(0.85, 1.35), rnd)
+                        n_t += 1
+                    g.merge(lift_geo(tg, float(gh(q)[0]) - 0.1))
+    # palmeras en el pueblo (malecon y camellones)
+    for i in range(0, n, step * 2):
+        if not town_m[i] or abs(off[i]) > 0.4:
+            continue
+        for side, wall in ((1, wpos), (-1, wneg)):
+            if rnd.random() < 0.35:
+                q = pts[i] + nrm[i] * side * (wall[i] - 0.6)
+                if free(q, 0.8):
+                    tg = Geo()
+                    palm_hd(tg, q[0], q[1], rnd.uniform(0.8, 1.05), rnd)
+                    g.merge(lift_geo(tg, float(h[i]) + 0.19))
+                    n_p += 1
+    # cruceros frente al pueblo
+    put = []
+    for _ in range(600):
+        a, rr = rnd.uniform(0, TAU), rnd.uniform(400, 3200)
+        q = town_c + np.array([math.cos(a), math.sin(a)]) * rr
+        d0 = float(ds_at(q)[0])
+        if not (-420 < d0 < -220) or any(np.hypot(*(q - p_)) < 500 for p_ in put):
+            continue
+        gdx = float(ds_at(q + [5, 0])[0] - ds_at(q - [5, 0])[0])
+        gdz = float(ds_at(q + [0, 5])[0] - ds_at(q - [0, 5])[0])
+        cruise_ship_hd(g, q, (-gdz, gdx) if abs(gdx) + abs(gdz) > 1e-6 else (1, 0), rnd.uniform(260, 320), sea_y,
+                       lights)
+        put.append(q)
+        if len(put) >= 3:
+            break
+    # faro de Punta Sur
+    if "puntasur" in lm:
+        c = fit_spot(track, lm["puntasur"], rw.max() + 12, zones, search=300)
+        faro_hd(g, c, float(gh(c)[0]) - 0.2, lights)
+        zones.circle(c, 8)
+    print(f"   selva: {n_t} arboles, {n_p} palmeras, {n_pa} palapas, {len(put)} cruceros")
 
 
 def build_osm_landmarks(g, gc, crowd, rnd, track, md, info, lights, lm, zones, openz, occ, T):
@@ -3866,10 +4229,14 @@ def build_osm_landmarks(g, gc, crowd, rnd, track, md, info, lights, lm, zones, o
             f = (pts[i_n] - c) / max(np.hypot(*(pts[i_n] - c)), 1e-6)
             placed(g, crowd, lights, gy(c), lambda tg, tc, tl: basilica_hd(tg, tc, rnd, c, f, tl))
             zones.circle(c, 100)
-        elif kind == "fanfest" and "monumento" in lm:
+        elif kind == "fanfest" and (v.get("lm", "monumento") in lm or v.get("lm") == "start"):
             r0 = float(v.get("r0", 45))
-            sc = fit_spot(track, lm["monumento"] + np.array([120.0, 60.0]), r0 + 8 + track.rw.max() + 4, zones,
-                          search=500)
+            if v.get("lm") == "start":                                     # junto a la salida
+                k_ = int(v.get("at", 60)) % track.n
+                hint = pts[k_] + track.nrm[k_] * v.get("side", 1) * (r0 + 30)
+            else:
+                hint = lm[v.get("lm", "monumento")] + np.array(v.get("off", (120.0, 60.0)))
+            sc = fit_spot(track, hint, r0 + 8 + track.rw.max() + 4, zones, search=500)
             y0 = gy(sc)
             tg, gct, inf, tl = Geo(), Geo(), {}, []
             fanfest_hd(tg, gct, OffsetCrowd(crowd, y0), rnd, track, sc, r0, md, inf, tl)

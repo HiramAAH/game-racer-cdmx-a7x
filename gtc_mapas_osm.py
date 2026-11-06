@@ -1217,7 +1217,16 @@ def debug_overlay(key, c, route_ll, cal, image, out_png):
     plt.close()
 
 
-if __name__ == "__main__" and len(sys.argv) == 2:
+if __name__ == "__main__" and len(sys.argv) < 2:                       # sin argumentos: ayuda
+    print("Uso:  python gtc_mapas_osm.py <mapa>     (genera mapas_osm/<mapa>.json.gz)")
+    print("      python gtc_mapas_osm.py todos      (genera todos)")
+    print("Mapas:")
+    for k_ in CIRCUITS:
+        ok_ = os.path.exists(os.path.join(OUT_DIR, k_ + ".json.gz"))
+        print(f"   {k_:14s} {'listo' if ok_ else 'FALTA generarlo'}")
+elif __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] not in CIRCUITS and sys.argv[1] != "todos":
+    print(f"No existe el mapa '{sys.argv[1]}'. Mapas: {', '.join(CIRCUITS)}")
+elif __name__ == "__main__" and len(sys.argv) == 2:
     keys = list(CIRCUITS) if sys.argv[1] == "todos" else [sys.argv[1]]
     for key in keys:
         print("==", key, flush=True)
