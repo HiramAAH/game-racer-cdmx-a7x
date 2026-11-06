@@ -2264,6 +2264,19 @@ class OSMTrack(MapTrack):
         cp = self.find_crossings()
         self.cross_pts = cp
         self.cross_flat = [(a, b, c) for a, b, c in cp if abs(self.h[a] - self.h[b]) < 3.0]
+        n = self.n
+        k = np.arange(-40, 41)
+        wgt = 0.5 + 0.5 * np.cos(np.pi * k / 40)                   # transicion suave de 120 m
+        for a, b, _ in self.cross_flat:
+            tgt = 0.5 * (self.h[a] + self.h[b])
+            for j, extra in ((a, 0.0), (b, 0.03)):
+                idx = (j + k) % n
+                self.h[idx] += (tgt + extra - self.h[j]) * wgt
+        # alturas sin escalones: suavizado ligero (la subida de los puentes queda continua)
+        ks = np.exp(-0.5 * (np.arange(-4, 5) / 1.6) ** 2)
+        ks /= ks.sum()
+        self.h = np.convolve(np.concatenate([self.h[-4:], self.h, self.h[:4]]), ks, "same")[4:-4]
+        self.dh = (np.roll(self.h, -1) - np.roll(self.h, 1)) / (2 * self.spacing)   # pendiente por muestra
 
     def nearest_dist(self, q):
         """Distancia a la ruta (rapida: indice por celdas; lejos de la ruta basta una aproximacion)."""
@@ -2289,8 +2302,28 @@ class OSMTrack(MapTrack):
         return float(self.h[i] * (1 - t) + self.h[(i + 1) % self.n] * t)
 
     def slope_at(self, u):
-        i = int((u % self.L) / self.spacing) % self.n
-        return float((self.h[(i + 2) % self.n] - self.h[i - 2]) / (4 * self.spacing))
+        f = (u % self.L) / self.spacing
+        i = int(f) % self.n
+        t = f - int(f)
+        return float(self.dh[i] * (1 - t) + self.dh[(i + 1) % self.n] * t)
+
+    def h_xz(self, x, z, near=None):
+        """Altura del camino en (x, z), interpolada sobre el tramo (sin saltos)."""
+        if near is None:
+            i = int(np.argmin((self.pts[:, 0] - x) ** 2 + (self.pts[:, 1] - z) ** 2))
+        else:
+            w = (np.arange(-12, 13) + int(near)) % self.n
+            i = int(w[np.argmin((self.pts[w, 0] - x) ** 2 + (self.pts[w, 1] - z) ** 2)])
+        j = (i - 1) % self.n
+        best = None
+        for a in (j, i):
+            d = self.d[a]
+            t = float(np.clip(((x - self.pts[a, 0]) * d[0] + (z - self.pts[a, 1]) * d[1]) * self.inv_len2[a], 0, 1))
+            e = (self.pts[a, 0] + d[0] * t - x) ** 2 + (self.pts[a, 1] + d[1] * t - z) ** 2
+            if best is None or e < best[0]:
+                best = (e, a, t)
+        _, a, t = best
+        return float(self.h[a] * (1 - t) + self.h[(a + 1) % self.n] * t)
 
     def project(self, x, z):
         car = sys._getframe(1).f_locals.get("self")
@@ -2619,11 +2652,11 @@ def build_world_osm(track, md):
     GX, GZ = np.meshgrid(gx, gz, indexing="ij")
     GQ = np.column_stack([GX.ravel(), GZ.ravel()])
     GY = T(GQ) - 0.35
-    sunk = np.nonzero(off < -0.4)[0]
-    if len(sunk):                                                         # deprimidos: el suelo baja junto al camino
-        ii, lat_, dist_ = nearest_route(track, rg, GQ, 60)
-        m = (ii >= 0) & (dist_ < rw[np.maximum(ii, 0)] + cell * 1.1) & (off[np.maximum(ii, 0)] < -0.4)
-        GY[m] = np.minimum(GY[m], h[ii[m]] - 0.4)
+    hb = h - np.maximum(off, 0.0)                                        # altura del camino sin contar puentes
+    ii, lat_, dist_ = nearest_route(track, rg, GQ, 110)
+    m = ii >= 0
+    lim = hb[ii[m]] - 0.45 + 0.03 * np.maximum(dist_[m] - rw[ii[m]] - 3.0, 0.0)
+    GY[m] = np.minimum(GY[m], lim)                                        # el piso siempre abajo del asfalto
     gmin = float(GY.min())
     grid(g, np.stack([GX, GY.reshape(GX.shape), GZ], -1), rgb(122, 118, 110), mat(M_CONC, 0.9), orient=(0, 1, 0))
     G2 = 7000
@@ -2738,6 +2771,10 @@ def build_world_osm(track, md):
             yy = yy + 7.2 * np.clip(prof * 2.0, 0, 1)
             inside[:] = False
         occ_pts = []
+        nr_ = (ii >= 0) & (dd < 40)
+        if nr_.any():
+            hbn = (h - np.maximum(off, 0.0))[ii[nr_]] - 0.1 + 0.01 * np.maximum(dd[nr_] - rw[ii[nr_]], 0.0)
+            yy[nr_] = np.minimum(yy[nr_], hbn)
         yy = yy + 0.03 + 0.012 * rank.get(w["c"], 0)
         keep = ~inside
         for r in hd.runs(keep) if not keep.all() else [np.arange(m_)]:
@@ -3599,15 +3636,28 @@ class GameMaps(hd.GameHD):
         tr = self.track
         if not isinstance(tr, OSMTrack):
             return 0.0
-        i = int(np.argmin((tr.pts[:, 0] - x) ** 2 + (tr.pts[:, 1] - z) ** 2))
-        return float(tr.h[i])
+        return tr.h_xz(x, z)
 
     def car_y(self, c):
         tr = self.track
         if not isinstance(tr, OSMTrack) or not hasattr(c, "u"):
             return 0.0, 0.0
-        u = c.u if not getattr(c, "remote", False) else c.u
-        return tr.h_at(u), tr.slope_at(u)
+        i = getattr(c, "idx", None)
+        y = tr.h_xz(c.x, c.z, near=i if isinstance(i, (int, np.integer)) else None)
+        return y, tr.slope_at(c.u)
+
+    def car_pitch(self, c):
+        """Inclinacion de la carroceria en la pendiente, filtrada (sin temblor)."""
+        tr = self.track
+        _, sl = self.car_y(c)
+        i = int((c.u % tr.L) / tr.spacing) % tr.n
+        along = math.cos(c.ang) * tr.tan[i, 0] + math.sin(c.ang) * tr.tan[i, 1]
+        tgt = math.atan(sl) * along
+        dt = getattr(self, "_frame_dt", 1 / 60)
+        p = getattr(c, "_slope_p", tgt)
+        p += (tgt - p) * min(1.0, dt * 10.0)
+        c._slope_p = p
+        return p
 
     def car_models(self, cars):
         if not isinstance(self.track, OSMTrack) or self.state in ("select", "lobby"):
@@ -3616,10 +3666,8 @@ class GameMaps(hd.GameHD):
         tr = self.track
         for c in cars:
             vis = c.vis
-            y, sl = self.car_y(c)
-            i = int((c.u % tr.L) / tr.spacing) % tr.n
-            along = math.cos(c.ang) * tr.tan[i, 0] + math.sin(c.ang) * tr.tan[i, 1]
-            M = model_full(c.x, y, c.z, c.ang, c.roll, c.pitch + math.atan(sl) * along)
+            y, _ = self.car_y(c)
+            M = model_full(c.x, y, c.z, c.ang, c.roll, c.pitch + self.car_pitch(c))
             r = vis["info"]["radius"]
             wheels = []
             for wx, wz in vis["info"]["wheels"]:
@@ -3634,11 +3682,26 @@ class GameMaps(hd.GameHD):
         return out
 
     def camera(self, dt):
+        self._frame_dt = dt if dt > 0 else 1 / 60
         eye, target, fov = super().camera(dt)
-        if isinstance(self.track, OSMTrack) and self.state not in ("select", "lobby"):
-            y = self.ground_y(target[0], target[2])
-            eye = (eye[0], eye[1] + y, eye[2])
-            target = (target[0], target[1] + y, target[2])
+        tr = self.track
+        if isinstance(tr, OSMTrack) and self.state not in ("select", "lobby"):
+            if self.state in ("countdown", "race", "finished") and self.cam_mode in (0, 1, 2, 3):
+                ref = self.player                                  # camara pegada a la altura del coche
+                y_t, _ = self.car_y(ref)
+                y_e = tr.h_xz(eye[0], eye[2], near=ref.idx)       # el ojo, a la altura de la calle donde esta
+                y_e = max(y_e, y_t - 2.0) if self.cam_mode in (0, 1) else y_t
+            else:
+                y_t = tr.h_xz(target[0], target[2])
+                y_e = tr.h_xz(eye[0], eye[2])
+            k = min(1.0, dt * 12.0) if dt > 0 else 1.0               # suavizado: sin temblor en las rampas
+            cy = getattr(self, "_cam_y", None)
+            if cy is None or abs(cy[0] - y_e) > 6 or abs(cy[1] - y_t) > 6:
+                cy = [y_e, y_t]
+            cy = [cy[0] + (y_e - cy[0]) * k, cy[1] + (y_t - cy[1]) * k]
+            self._cam_y = cy
+            eye = (eye[0], eye[1] + cy[0], eye[2])
+            target = (target[0], target[1] + cy[1], target[2])
         return eye, target, fov
 
     def gather_lights(self, eye, tod):
