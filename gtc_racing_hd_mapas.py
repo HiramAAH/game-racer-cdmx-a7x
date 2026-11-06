@@ -775,7 +775,7 @@ def building_hd(g, crowd, rnd, c, f, o, hl, hdp, h, col, shop=True, roof_fans=Fa
         sign_quad(g, F - o * 0.05, -o, min(w, 4.5), 3.3, 4.2, rnd.choice(SHOP_SIGNS))
     for _ in range(rnd.choice([0, 1, 1, 2, 3])):                               # tinacos
         p = c + f * rnd.uniform(-hl + 1, hl - 1) + o * rnd.uniform(-hdp + 1, hdp - 1)
-        fcyl(g, p[0], p[1], h, h + 1.4, 0.62, rgb(22, 22, 24), mat(M_DEF, 0.6), seg=10)
+        fcyl(g, p[0], p[1], h, h + 1.4, 0.62, rgb(22, 22, 24), mat(M_DEF, 0.6), seg=6)
     if rnd.random() < 0.18:                                                    # cuarto de azotea
         p = c + o * rnd.uniform(-hdp * 0.4, hdp * 0.4)
         frame_box(g, p, f, (min(2.5, hl * 0.4), 2.0), (0.9, 0.88, 0.84), mat(M_CONC, 0.8), h, h + 2.6)
@@ -2264,19 +2264,72 @@ class OSMTrack(MapTrack):
         cp = self.find_crossings()
         self.cross_pts = cp
         self.cross_flat = [(a, b, c) for a, b, c in cp if abs(self.h[a] - self.h[b]) < 3.0]
-        n = self.n
-        k = np.arange(-40, 41)
-        wgt = 0.5 + 0.5 * np.cos(np.pi * k / 40)                   # transicion suave de 120 m
-        for a, b, _ in self.cross_flat:
-            tgt = 0.5 * (self.h[a] + self.h[b])
-            for j, extra in ((a, 0.0), (b, 0.03)):
-                idx = (j + k) % n
-                self.h[idx] += (tgt + extra - self.h[j]) * wgt
+        self.fix_overlaps()
         # alturas sin escalones: suavizado ligero (la subida de los puentes queda continua)
         ks = np.exp(-0.5 * (np.arange(-4, 5) / 1.6) ** 2)
         ks /= ks.sum()
         self.h = np.convolve(np.concatenate([self.h[-4:], self.h, self.h[:4]]), ks, "same")[4:-4]
         self.dh = (np.roll(self.h, -1) - np.roll(self.h, 1)) / (2 * self.spacing)   # pendiente por muestra
+
+    def fix_overlaps(self):
+        """Donde la ruta pasa dos veces por el mismo lugar: misma altura (cruce a nivel o la misma avenida de ida y
+        vuelta) o, si una va por arriba, al menos 7.5 m de altura libre (puente)."""
+        n, P = self.n, self.pts
+        G, cell = {}, 12.0
+        for i, (x, z) in enumerate(P):
+            G.setdefault((int(x // cell), int(z // cell)), []).append(i)
+        I, J, D, S = [], [], [], []
+        for i, (x, z) in enumerate(P):
+            cx, cz = int(x // cell), int(z // cell)
+            best = None
+            for dx in (-2, -1, 0, 1, 2):
+                for dz in (-2, -1, 0, 1, 2):
+                    for j in G.get((cx + dx, cz + dz), ()):
+                        ds = abs(i - j)
+                        if min(ds, n - ds) < 40:
+                            continue
+                        d = math.hypot(P[j, 0] - x, P[j, 1] - z)
+                        if d < self.rw[i] + self.rw[j] + 4.0 and (best is None or d < best[1]):
+                            best = (j, d)
+            if best is not None:
+                j, d = best
+                I.append(i)
+                J.append(j)
+                D.append(d)
+                e = P[j] - P[i]
+                S.append(1 if e[0] * self.nrm[i, 0] + e[1] * self.nrm[i, 1] >= 0 else -1)
+        self.partner = np.full(n, -1)
+        self.partner_d = np.zeros(n)
+        self.partner_side = np.zeros(n, int)
+        if not I:
+            return
+        I, J, D, S = map(np.array, (I, J, D, S))
+        self.partner[I], self.partner_d[I], self.partner_side[I] = J, D, S
+        h0, off0 = self.h.copy(), self.off.copy()
+        delta = np.zeros(n)
+        fixed = np.zeros(n, bool)
+        dh = h0[J] - h0[I]
+        flat = np.abs(dh) < 5.0
+        delta[I[flat]] = 0.5 * (h0[I[flat]] + h0[J[flat]]) - h0[I[flat]] + np.where(I[flat] > J[flat], 0.03, 0.0)
+        fixed[I[flat]] = True
+        up = ~flat & (dh < 0) & (np.abs(dh) < 7.5)          # i va arriba de j: subir i
+        delta[I[up]] = 7.5 - np.abs(dh[up])
+        fixed[I[up]] = True
+        for _ in range(6):                                  # la zona igualada se extiende 18 m mas
+            for sh in (1, -1):
+                nb = np.roll(fixed, sh) & ~fixed
+                delta[nb] = np.roll(delta, sh)[nb]
+                fixed = fixed | nb
+        if fixed.any():
+            d2 = delta.copy()
+            for _ in range(220):                            # transicion suave (~25 muestras) hacia cero
+                avg = 0.5 * (np.roll(d2, 1) + np.roll(d2, -1)) * 0.97
+                d2 = np.where(fixed, delta, avg)
+            self.h = h0 + d2
+            rise = np.where(d2 > 0.4, d2, 0.0)
+            br = rise > 0.4
+            self.off = np.where(br, np.maximum(off0, rise), off0)   # se dibuja como puente
+            self.br = self.br | (br & (self.off > 3.0))
 
     def nearest_dist(self, q):
         """Distancia a la ruta (rapida: indice por celdas; lejos de la ruta basta una aproximacion)."""
@@ -2474,6 +2527,20 @@ def inside_poly(P, Q):
     return ins
 
 
+def open_runs(mask):
+    """Tramos contiguos True de una linea ABIERTA (sin unir el final con el principio)."""
+    out, cur = [], []
+    for k, v in enumerate(mask):
+        if v:
+            cur.append(k)
+        elif cur:
+            out.append(np.array(cur))
+            cur = []
+    if cur:
+        out.append(np.array(cur))
+    return out
+
+
 def route_grid(track, cell=12.0):
     """Indice espacial de las muestras de la ruta."""
     G = {}
@@ -2606,10 +2673,10 @@ def osm_building(g, P, base, top, col, rnd, route_facing=None, sign_k=None, crow
         T = np.array([[A[a], A[b], A[c]] for a, b, c in tri]).reshape(-1, 2)
         g.tris(np.column_stack([T[:, 0], np.full(len(T), top), T[:, 1]]), (0.0, 1.0, 0.0),
                tuple(v * 0.8 for v in col), mat(M_CONC, 0.85), T)
-    if top - base < 30 and rnd.random() < 0.6:                                   # tinacos
-        for _ in range(rnd.randint(1, 3)):
+    if top - base < 30 and rnd.random() < 0.35:                                  # tinacos
+        for _ in range(rnd.randint(1, 2)):
             q = cen + (A[rnd.randrange(k)] - cen) * rnd.uniform(0.1, 0.6)
-            fcyl(g, q[0], q[1], top, top + 1.4, 0.62, rgb(22, 22, 24), mat(M_DEF, 0.6), seg=8)
+            fcyl(g, q[0], q[1], top, top + 1.4, 0.62, rgb(22, 22, 24), mat(M_DEF, 0.6), seg=6)
     if route_facing is not None:                                                # local hacia la ruta
         j = route_facing
         a, b, nv = A[j], B[j], Nn[j]
@@ -2634,6 +2701,14 @@ def build_world_osm(track, md):
     crowd = PaletteCrowd(MEXICO_SHIRTS if md.palette == "mexico" else md.palette) if md.palette else Crowd()
     pts, nrm, tan, n = track.pts, track.nrm, track.tan, track.n
     rw, h, off = track.rw, track.h, track.off
+    shared = np.zeros((n, 2), bool)                                        # lado donde la ruta vuelve a pasar
+    for i in np.nonzero(track.partner >= 0)[0]:
+        j = track.partner[i]
+        if abs(tan[i] @ tan[j]) < 0.85:                                    # cruce en X: los dos lados
+            shared[i, :] = True
+        else:
+            shared[i, 1 if track.partner_side[i] > 0 else 0] = True
+    shared = np.stack([np.convolve(shared[:, k].astype(float), np.ones(9), "same") > 0 for k in (0, 1)], 1)
     lm0 = {k: np.array(v[:2], float) for k, v in d.get("lm", {}).items()}
     if md.datum in lm0 and not getattr(track, "_datum_done", False):     # el concierto queda en y = 0
         dy = float(Terrain(track)([lm0[md.datum]])[0])
@@ -2653,12 +2728,40 @@ def build_world_osm(track, md):
     GQ = np.column_stack([GX.ravel(), GZ.ravel()])
     GY = T(GQ) - 0.35
     hb = h - np.maximum(off, 0.0)                                        # altura del camino sin contar puentes
+    hbmin = np.minimum.reduce([np.roll(hb, q) for q in range(-16, 17, 2)])    # lo mas bajo en +-48 m
     ii, lat_, dist_ = nearest_route(track, rg, GQ, 110)
     m = ii >= 0
-    lim = hb[ii[m]] - 0.45 + 0.03 * np.maximum(dist_[m] - rw[ii[m]] - 3.0, 0.0)
+    lim = hbmin[ii[m]] - 0.45 + 0.03 * np.maximum(dist_[m] - rw[ii[m]] - 30.0, 0.0)
     GY[m] = np.minimum(GY[m], lim)                                        # el piso siempre abajo del asfalto
+    GY = GY.reshape(GX.shape)
+    nxg, nzg = GY.shape
+    probe = np.concatenate([pts + nrm * (rw * f)[:, None] for f in (-1.0, -0.5, 0.0, 0.5, 1.0)])
+    ptop = np.tile(hb, 5) - 0.3
+    fx = np.clip((probe[:, 0] - gx[0]) / cell, 0, nxg - 1.001)
+    fz = np.clip((probe[:, 1] - gz[0]) / cell, 0, nzg - 1.001)
+    ix, iz = fx.astype(int), fz.astype(int)
+    tx, tz = fx - ix, fz - iz
+    for _ in range(6):                                                    # bajar las esquinas que quedan arriba
+        y = ((GY[ix, iz] * (1 - tx) + GY[ix + 1, iz] * tx) * (1 - tz) +
+             (GY[ix, iz + 1] * (1 - tx) + GY[ix + 1, iz + 1] * tx) * tz)
+        ex = y - ptop
+        bad = ex > 0
+        if not bad.any():
+            break
+        for ax, az in ((0, 0), (1, 0), (0, 1), (1, 1)):
+            np.minimum.at(GY, (ix[bad] + ax, iz[bad] + az), GY[ix[bad] + ax, iz[bad] + az] - ex[bad] - 0.05)
+
+    def gh(Q):
+        """Altura del piso (la misma malla que se dibuja)."""
+        Q = np.asarray(Q, float).reshape(-1, 2)
+        fx_ = np.clip((Q[:, 0] - gx[0]) / cell, 0, nxg - 1.001)
+        fz_ = np.clip((Q[:, 1] - gz[0]) / cell, 0, nzg - 1.001)
+        ix_, iz_ = fx_.astype(int), fz_.astype(int)
+        tx_, tz_ = fx_ - ix_, fz_ - iz_
+        return ((GY[ix_, iz_] * (1 - tx_) + GY[ix_ + 1, iz_] * tx_) * (1 - tz_) +
+                (GY[ix_, iz_ + 1] * (1 - tx_) + GY[ix_ + 1, iz_ + 1] * tx_) * tz_)
     gmin = float(GY.min())
-    grid(g, np.stack([GX, GY.reshape(GX.shape), GZ], -1), rgb(122, 118, 110), mat(M_CONC, 0.9), orient=(0, 1, 0))
+    grid(g, np.stack([GX, GY, GZ], -1), rgb(122, 118, 110), mat(M_CONC, 0.9), orient=(0, 1, 0))
     G2 = 7000
     for (x0, x1, z0, z1) in ((cxm - G2, lo[0], czm - G2, czm + G2), (hi[0], cxm + G2, czm - G2, czm + G2),
                              (lo[0], hi[0], czm - G2, lo[1]), (lo[0], hi[0], hi[1], czm + G2)):
@@ -2696,17 +2799,18 @@ def build_world_osm(track, md):
     sunkm = off < -0.4
     conc, conc2 = rgb(176, 174, 168), rgb(150, 148, 142)
     for side in (-1, 1):
-        for r in hd.runs(elev):
+        sh_ = shared[:, 1 if side > 0 else 0]
+        for r in hd.runs(elev & ~sh_):
             e = rw[r] + 1.6
             road_ribbon(g, track, r, np.array([rw[r], rw[r] + 1.0]) * side, (h[r] + 0.06)[None, :],
                         rgb(64, 64, 68), mat(M_CONC, 0.8))
             road_ribbon(g, track, r, np.array([rw[r] + 1.0, rw[r] + 1.0, e, e]) * side,
                         np.array([h[r] + 0.06, h[r] + 0.95, h[r] + 0.95, h[r] - 1.25]), conc, mat(M_CONC, 0.8))
-        for r in hd.runs(elev & ~track.br):                               # terraplen: muro hasta el suelo
+        for r in hd.runs(elev & ~track.br & ~sh_):                        # terraplen: muro hasta el suelo
             e = rw[r] + 1.6
             road_ribbon(g, track, r, np.array([e, e]) * side, np.array([h[r] - 1.2, T(pts[r]) - 0.6]), conc2,
                         mat(M_CONC, 0.85))
-        for r in hd.runs(sunkm):                                          # deprimido: muros de contencion
+        for r in hd.runs(sunkm & ~sh_):                                   # deprimido: muros de contencion
             e = rw[r] + 1.6
             top = np.maximum(T(pts[r]) + 1.0, h[r] + 1.0)
             road_ribbon(g, track, r, np.array([rw[r], e, e, e + 0.6]) * side,
@@ -2749,7 +2853,16 @@ def build_world_osm(track, md):
                  bottom=True)
             lights.append((float(pts[k][0]), h[k] + 4.8, float(pts[k][1]), 18.0, 1.0, 0.8, 0.55, 3.0))
     # ---------------------------------------------------------------- otras calles reales
-    ways = d.get("ways", [])
+    ways = []
+    for w in d.get("ways", []):                                           # puntos cada 4 m (OSM los tiene muy separados)
+        P = np.array(w["p"], float)
+        if len(P) < 2:
+            continue
+        Q = [P[0]]
+        for a, b in zip(P[:-1], P[1:]):
+            k = max(1, int(np.hypot(*(b - a)) / 4.0))
+            Q += [a + (b - a) * (j / k) for j in range(1, k + 1)]
+        ways.append(dict(w, p=np.array(Q)))
     allv = np.array([q for w in ways for q in w["p"]], float).reshape(-1, 2)
     vi, vlat, vd = nearest_route(track, rg, allv, 40)
     vy = T(allv)
@@ -2765,22 +2878,42 @@ def build_world_osm(track, md):
             continue
         wh = float(w["w"])
         # fuera del corredor de la ruta (ahi manda la ruta)
-        inside = (ii >= 0) & (dd < rw[np.maximum(ii, 0)] - 0.4)
+        if w.get("r"):
+            inside = (ii >= 0) & (dd < 45)                                # es la misma calle de la ruta: ya esta dibujada
+        else:
+            inside = (ii >= 0) & (dd < rw[np.maximum(ii, 0)] + wh * 0.8 - 0.4)
         if w.get("b"):                                                    # paso superior / puente de otra calle
-            prof = np.minimum(np.linspace(0, 1, m_), np.linspace(1, 0, m_)) * 2
-            yy = yy + 7.2 * np.clip(prof * 2.0, 0, 1)
-            inside[:] = False
+            dq_ = np.gradient(P, axis=0)
+            dq_ /= np.maximum(np.hypot(dq_[:, 0], dq_[:, 1]), 1e-6)[:, None]
+            ic = np.maximum(ii, 0)
+            near_c = (ii >= 0) & (dd < rw[ic] + wh + 3.0)
+            cross_c = near_c & (np.abs((dq_ * tan[ic]).sum(1)) < 0.7)      # atraviesa la ruta: libre de 6.8 m
+            par_c = near_c & ~cross_c                                      # va junto a la ruta: abajo
+            yy[cross_c] = np.maximum(yy[cross_c], (h - np.minimum(off, 0.0))[ic[cross_c]] + 6.8)
+            yy[par_c] = np.minimum(yy[par_c], (h - np.maximum(off, 0.0))[ic[par_c]] - 0.15)
+            if cross_c.any():
+                for rng_ in (range(1, m_), range(m_ - 2, -1, -1)):         # rampas de 12 %
+                    for k_ in rng_:
+                        prv = k_ - 1 if rng_.step == 1 else k_ + 1
+                        yy[k_] = max(yy[k_], yy[prv] - 0.12 * float(np.hypot(*(P[k_] - P[prv]))))
+            inside = par_c & (dd < rw[ic] + wh * 0.8 - 0.4)
         occ_pts = []
         nr_ = (ii >= 0) & (dd < 40)
-        if nr_.any():
-            hbn = (h - np.maximum(off, 0.0))[ii[nr_]] - 0.1 + 0.01 * np.maximum(dd[nr_] - rw[ii[nr_]], 0.0)
+        if nr_.any() and not w.get("b"):
+            hbw = h - np.maximum(off, 0.0)
+            hbw = np.minimum.reduce([hbw, np.roll(hbw, 1), np.roll(hbw, -1), np.roll(hbw, 2), np.roll(hbw, -2)])
+            hbn = hbw[ii[nr_]] - 0.12 + 0.01 * np.maximum(dd[nr_] - rw[ii[nr_]], 0.0)
             yy[nr_] = np.minimum(yy[nr_], hbn)
         yy = yy + 0.03 + 0.012 * rank.get(w["c"], 0)
         keep = ~inside
-        for r in hd.runs(keep) if not keep.all() else [np.arange(m_)]:
+        dense = (ii >= 0) & (dd < rw[np.maximum(ii, 0)] + wh + 12)          # puntos densos solo junto a la ruta
+        for r in open_runs(keep):
             r = r[r < m_]
             if len(r) < 2:
                 continue
+            sel = dense[r] | (np.arange(len(r)) % 6 == 0)
+            sel[0] = sel[-1] = True
+            r = r[sel]
             Q = P[r]
             dq = np.gradient(Q, axis=0)
             dq /= np.maximum(np.hypot(dq[:, 0], dq[:, 1]), 1e-6)[:, None]
@@ -2832,8 +2965,21 @@ def build_world_osm(track, md):
         near = ii >= 0
         if near.any() and np.min(np.abs(lt[near]) - rw[ii[near]]) < 1.2:
             continue                                                      # se mete a la calle: se omite
+        if near.any() and np.min(dd[near]) < 30:
+            E_ = np.concatenate([P[a_] + (P[a_ + 1] - P[a_]) * t_ for a_ in range(m_ - 1)
+                                 for t_ in np.linspace(0, 1, max(2, int(np.hypot(*(P[a_ + 1] - P[a_])) / 2) + 1))[:, None]
+                                 ]).reshape(-1, 2)
+            ei, el, _ = nearest_route(track, rg, E_, 30)
+            okE = ei >= 0
+            if okE.any() and np.min(np.abs(el[okE]) - rw[ei[okE]]) < 1.2:
+                continue
+
         if zones.hit(cen).any() or float(b.get("ly", 0) or 0) < 0:
             continue
+        mn_b, mx_b = P.min(0) - 2, P.max(0) + 2
+        rin = np.nonzero((pts[:, 0] > mn_b[0]) & (pts[:, 0] < mx_b[0]) & (pts[:, 1] > mn_b[1]) & (pts[:, 1] < mx_b[1]))[0]
+        if len(rin) and inside_poly(P, pts[rin]).any():
+            continue                                                      # la ruta pasa por dentro
         area = 0.5 * abs(np.dot(P[:-1, 0], P[1:, 1]) - np.dot(P[1:, 0], P[:-1, 1]))
         if area < 12:
             continue
@@ -2933,7 +3079,7 @@ def build_world_osm(track, md):
             x, z, tx, tz = track.point(s + wdt / 2)
             f, o = np.array([tx, tz]), nrm[i] * side
             c = np.array([x, z]) + o * (fd + dp / 2)
-            corners = np.array([c + f * a + o * b for a in (-wdt / 2, wdt / 2) for b in (-dp / 2, dp / 2)])
+            corners = np.array([c + f * a + o * b for a in (-wdt / 2, 0.0, wdt / 2) for b in (-dp / 2, 0.0, dp / 2)])
             cells = occ.cells(c, f, wdt / 2, dp / 2)
             if (track.nearest_dist(corners) >= fd - 0.6).all() and occ.free(cells) and \
                     not (zones.hit(corners) | openz.hit(corners)).any():
@@ -2997,6 +3143,10 @@ def build_world_osm(track, md):
                     tg = Geo()
                     (jacaranda_hd if rnd.random() < 0.5 else tree_hd)(tg, q[0], q[1], rnd.uniform(0.9, 1.3), rnd)
                     g.merge(lift_geo(tg, h[k] + 0.25))
+    for i in np.nonzero(track.partner >= 0)[0]:                           # la calzada vecina tambien es calle
+        j = track.partner[i]
+        wall_ = wpos if track.partner_side[i] > 0 else wneg
+        wall_[i] = max(wall_[i], min(track.partner_d[i] + rw[j] + 1.0, rw[i] + 14.0))
     track.wpos, track.wneg = wpos, wneg
     fac = {1: wpos.copy(), 0: wneg.copy()}
     # vallas con publico en tramos de banqueta (y junto a la salida y los lugares)
@@ -3013,7 +3163,7 @@ def build_world_osm(track, md):
                 valla[[(k + q) % n for q in range(ln_)], sidx] = True
             k += ln_ + rnd.randint(5, 40)
     for sidx, wall in ((1, wpos), (0, wneg)):
-        m = valla[:, sidx] & (wall > rw + 3.0) & (np.abs(off) < 0.4) & ~mouth[:, sidx]
+        m = valla[:, sidx] & (wall > rw + 3.0) & (np.abs(off) < 0.4) & ~mouth[:, sidx] & ~shared[:, sidx]
         valla[:, sidx] = m
         wall[m] = rw[m] + 1.3
     for wall in (wpos, wneg):                                             # la pared se angosta poco a poco
@@ -3021,7 +3171,7 @@ def build_world_osm(track, md):
             wall[:] = np.maximum.reduce([wall, np.roll(wall, 1) - 0.5, np.roll(wall, -1) - 0.5])
     for sidx, wall in ((1, wpos), (0, wneg)):                             # banquetas con su guarnicion
         side = 1 if sidx else -1
-        ok = (np.abs(off) < 0.4) & ~mouth[:, sidx]
+        ok = (np.abs(off) < 0.4) & ~mouth[:, sidx] & ~shared[:, sidx]
         for r in hd.runs(ok):
             sw_out = np.clip(fac[sidx][r], rw[r] + 0.6, rw[r] + 0.3 + np.maximum(sw_des[r], 1.0) + 1.5)
             road_ribbon(g, track, r, np.array([rw[r], rw[r], rw[r] + 0.3, sw_out, sw_out]) * side,
@@ -3047,7 +3197,7 @@ def build_world_osm(track, md):
                     q = pts[k] + nrm[k] * side * lt + tan[k] * rnd.uniform(-1.5, 1.5)
                     crowd.add(q[0], h[k] + 0.19, q[1], -nrm[k, 0] * side, -nrm[k, 1] * side, rnd)
         for k in range(4, n, 13):                                         # postes de luz en la orilla
-            if abs(off[k]) > 0.4 or mouth[k, sidx]:
+            if abs(off[k]) > 0.4 or mouth[k, sidx] or shared[k, sidx]:
                 continue
             q = pts[k] + nrm[k] * side * (rw[k] + 0.45 if not valla[k, sidx] else rw[k] + 1.6)
             fcyl(g, q[0], q[1], h[k] + 0.19, h[k] + 9.5, 0.13, rgb(85, 92, 98), mat(M_METAL, 0.45, 0.8), seg=6, r1=0.09)
@@ -3099,7 +3249,7 @@ def build_world_osm(track, md):
         hh = rnd.choice(STORIES) * 3.4 + 0.4
         fbox(g, c, (1, 0), w_, dp_, yb - 2.0, yb + hh, rnd.choice(FACADES), mat(M_WINDOWS, 0.5, 0.05))
         if dist < 120 and rnd.random() < 0.5:
-            fcyl(g, c[0] + w_ * 0.4, c[1], yb + hh, yb + hh + 1.4, 0.62, rgb(22, 22, 24), mat(M_DEF, 0.6), seg=8)
+            fcyl(g, c[0] + w_ * 0.4, c[1], yb + hh, yb + hh + 1.4, 0.62, rgb(22, 22, 24), mat(M_DEF, 0.6), seg=6)
     # ---------------------------------------------------------------- parques, agua, rios y arboles
     park_budget = [500]
     for a in d.get("areas", []):
@@ -3113,14 +3263,25 @@ def build_world_osm(track, md):
                "playground": rgb(170, 140, 100), "meadow": rgb(96, 130, 60), "scrub": rgb(90, 110, 60)}.get(k)
         if col is None:
             continue
-        cen = P.mean(0)
-        y = float(T([cen])[0]) - 0.28 + (0.04 if k == "water" else 0.0)
-        tri = ear_clip([tuple(p) for p in P[:-1]])
-        if not tri:
+        mn_, mx_ = P.min(0), P.max(0)
+        area_ = 0.5 * abs(np.dot(P[:-1, 0], P[1:, 1]) - np.dot(P[1:, 0], P[:-1, 1]))
+        stp = float(np.clip(math.sqrt(max(area_, 1.0) / 250.0), 6.0, 30.0))    # mosaico pegado al piso
+        ax_ = np.arange(mn_[0], mx_[0] + stp, stp)
+        az_ = np.arange(mn_[1], mx_[1] + stp, stp)
+        if len(ax_) < 2 or len(az_) < 2 or len(ax_) * len(az_) > 40000:
             continue
-        TT = np.array([[P[i_], P[j_], P[k_]] for i_, j_, k_ in tri]).reshape(-1, 2)
-        g.tris(np.column_stack([TT[:, 0], np.full(len(TT), y), TT[:, 1]]), (0, 1, 0), col,
-               mat(M_DEF, 0.06, 0.25) if k == "water" else mat(M_GRASS, 0.95), TT)
+        AX, AZ = np.meshgrid(ax_, az_, indexing="ij")
+        cen_ = np.column_stack([(AX[:-1, :-1] + stp / 2).ravel(), (AZ[:-1, :-1] + stp / 2).ravel()])
+        insd = inside_poly(P, cen_)
+        if not insd.any():
+            continue
+        AY = (gh(np.column_stack([AX.ravel(), AZ.ravel()])) + (0.07 if k == "water" else 0.05)).reshape(AX.shape)
+        ci, cj = np.unravel_index(np.nonzero(insd)[0], (len(ax_) - 1, len(az_) - 1))
+        C4 = [(ci, cj), (ci + 1, cj), (ci + 1, cj + 1), (ci, cj + 1)]
+        V = np.stack([np.stack([AX[a, b], AY[a, b], AZ[a, b]], -1) for a, b in C4], 1)    # (m, 4, 3)
+        V = V[:, [0, 1, 2, 0, 2, 3]].reshape(-1, 3)
+        g.tris(V, (0.0, 1.0, 0.0), col, mat(M_DEF, 0.06, 0.25) if k == "water" else mat(M_GRASS, 0.95),
+               V[:, [0, 2]])
         if k in ("park", "garden", "forest", "wood", "recreation_ground"):
             mn, mx = P.min(0), P.max(0)
             area = 0.5 * abs(np.dot(P[:-1, 0], P[1:, 1]) - np.dot(P[1:, 0], P[:-1, 1]))
@@ -3135,7 +3296,7 @@ def build_world_osm(track, md):
             if not len(TP):
                 continue
             okd = track.nearest_dist(TP) > rw.max() + 4
-            ty = T(TP)
+            ty = gh(TP) + 0.3
             placed_t = 0
             for (x, z), ok_, yt in zip(TP, okd, ty):
                 if placed_t >= cnt:
@@ -3155,10 +3316,10 @@ def build_world_osm(track, md):
         dq = np.gradient(P, axis=0)
         dq /= np.maximum(np.hypot(dq[:, 0], dq[:, 1]), 1e-6)[:, None]
         nq = np.column_stack([-dq[:, 1], dq[:, 0]])
-        yy = T(P)
+        yy = gh(P) + 0.3
         ii, _, dd = nearest_route(track, rg, P, 40)
-        clear = ~((ii >= 0) & (dd < rw[np.maximum(ii, 0)] + 2))
-        for r in hd.runs(clear) if not clear.all() else [np.arange(len(P))]:
+        clear = ~((ii >= 0) & (dd < rw[np.maximum(ii, 0)] + wh + 5))
+        for r in open_runs(clear):
             r = r[r < len(P)]
             if len(r) < 2:
                 continue
@@ -3645,6 +3806,35 @@ class GameMaps(hd.GameHD):
         i = getattr(c, "idx", None)
         y = tr.h_xz(c.x, c.z, near=i if isinstance(i, (int, np.integer)) else None)
         return y, tr.slope_at(c.u)
+
+    # ------------------------------------------------------------ direccion progresiva a alta velocidad
+    STEER_V0 = 25.0                     # hasta ~90 km/h la direccion queda igual que siempre
+
+    @staticmethod
+    def _steer_sat(v, grip):
+        """Fraccion de direccion que ya usa todo el agarre a la velocidad v (modelo del juego base)."""
+        v = max(v, 1.0)
+        return math.atan(grip * base.WB / (v * v)) * (1 + v / 16) / 0.6
+
+    def player_inputs(self):
+        thr, brk, st, hb, nitro = super().player_inputs()
+        p = self.player
+        v = abs(p.vf)
+        dt = getattr(self, "_frame_dt", 1 / 60)
+        # 1) la tecla no salta a tope: rampa mas lenta a mayor velocidad (los toques cortos corrigen poquito)
+        hi = hd.clamp((v - 20.0) / 50.0, 0.0, 1.0)
+        cur = getattr(self, "_st_in", 0.0)
+        if st != 0 and st * cur >= 0 and abs(st) > abs(cur):
+            rate = 1.0 / (0.06 + 0.24 * hi)                 # 0.06 s a baja velocidad, 0.30 s a tope
+        else:
+            rate = 9.0                                      # soltar o cambiar de lado: rapido
+        cur += hd.clamp(st - cur, -rate * dt, rate * dt)
+        self._st_in = cur
+        # 2) la misma fraccion de volante = la misma fraccion del agarre, a cualquier velocidad
+        if v > self.STEER_V0 and not hb:
+            k = min(1.0, self._steer_sat(v, p.grip) / self._steer_sat(self.STEER_V0, p.grip))
+            cur *= k
+        return thr, brk, cur, hb, nitro
 
     def car_pitch(self, c):
         """Inclinacion de la carroceria en la pendiente, filtrada (sin temblor)."""

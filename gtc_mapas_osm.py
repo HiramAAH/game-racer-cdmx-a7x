@@ -260,7 +260,7 @@ def norm_name(s):
     return " ".join(s.split())
 
 
-def remove_loops(seq, G, max_len=900.0):
+def remove_loops(seq, G, max_len=1600.0):
     """Quita idas y vueltas cortas (un nodo que se repite a menos de max_len metros). Los cruces largos
     de la ruta consigo misma (p. ej. Reforma con Insurgentes) se respetan."""
     out, pos, cum = [], {}, [0.0]
