@@ -105,6 +105,18 @@ CIRCUITS = {
                (19.3730, -99.1918, "@arriba")],
         free_last=True, free_legs=(6,),
         legs={}, fixed={}),
+    "cozumel": dict(
+        # imagen 15 del usuario (pines de Google Maps: el punto real esta ~10 px abajo del circulo)
+        ref=[((360, 47), (20.5131459, -86.9478283)), ((159, 393), (20.4025, -87.0172222)),
+             ((145, 539), (20.3522293, -87.0224394)), ((327, 726), (20.2990492, -87.0051426)),
+             ((654, 85), (20.4956111, -86.846)), ((231, 506), (20.367614, -86.993528))],
+        route=[(348, 96), (365, 103), (380, 92), (400, 100), (425, 128), (460, 140), (500, 175), (540, 215),
+               (580, 250), (620, 290), (655, 318), (658, 345), (630, 370), (600, 405), (575, 440), (555, 460),
+               (520, 540), (490, 570), (465, 585), (440, 620), (410, 660), (370, 690), (330, 710), (310, 730),
+               (290, 725), (265, 690), (230, 640), (185, 595), (160, 540), (152, 500), (150, 450), (158, 400),
+               (170, 350), (200, 305), (240, 265), (265, 225), (285, 190), (282, 160), (300, 110), (330, 82)],
+        links=[((20.4303632, -86.8511796), (20.4238561, -86.8432937), "Carretera Transversal de Cozumel")],
+        coast=True, any_dir=True, fix_gaps=True, snap_classes=("trunk", "primary", "secondary", "tertiary"), legs={}, fixed={}),
     "tangamanga": dict(
         # glorietas del parque (imagen 13 del usuario) con su coordenada real (OpenStreetMap)
         ref=[((268, 108), (22.18638, -100.99249)), ((233, 375), (22.18152, -100.99318)),
@@ -222,6 +234,39 @@ class Graph:
                     self.adj.setdefault(u, []).append((v, d * k * pen, wi))
                     if pen > 1.0:
                         self.wrongway.add((u, v))
+
+    def fix_gaps(self, maxd=40.0):
+        """Une extremos sueltos de calles con el nodo mas cercano de otra calle (huecos en los datos de OSM)."""
+        deg = {}
+        for u, lst in self.adj.items():
+            deg[u] = len({v for v, _, _ in lst})
+        ends = [u for u, k in deg.items() if k == 1]
+        cell = maxd
+        grid_ = {}
+        for nid, (la, lo) in self.node.items():
+            if nid in deg:
+                grid_.setdefault((int(la * 110574 // cell), int(lo * 104000 // cell)), []).append(nid)
+        added = 0
+        for u in ends:
+            la, lo = self.node[u]
+            cx, cz = int(la * 110574 // cell), int(lo * 104000 // cell)
+            own = {v for v, _, _ in self.adj[u]}
+            best = None
+            for dx in (-1, 0, 1):
+                for dz in (-1, 0, 1):
+                    for v in grid_.get((cx + dx, cz + dz), ()):
+                        if v == u or v in own:
+                            continue
+                        d = self.dist(u, v)
+                        if d < maxd and (best is None or d < best[0]):
+                            best = (d, v)
+            if best:
+                d, v = best
+                wi = self.adj[u][0][2]
+                self.adj[u].append((v, d, wi))
+                self.adj.setdefault(v, []).append((u, d, wi))
+                added += 1
+        print(f"   huecos unidos: {added}")
 
     def dist(self, a, b):
         (la, oa), (lb, ob) = self.node[a], self.node[b]
@@ -361,6 +406,29 @@ def build_route_graph(key, c):
          f'{bbox[3]:.5f});out body;>;out skel qt;')
     G = Graph(overpass(q, key + "_calles" + ("" if m == 0.008 else f"_{m}")))
     G.strict = bool(c.get("strict"))
+    for k_, (pa, pb, nm_) in enumerate(c.get("links", ())):     # tramos que faltan en OSM
+        G.ways.append({"tags": {"highway": "secondary", "name": nm_}, "nodes": []})
+        wi_ = len(G.ways) - 1
+        na = min(G.node, key=lambda n: (G.node[n][0] - pa[0]) ** 2 + (G.node[n][1] - pa[1]) ** 2)
+        nb = min(G.node, key=lambda n: (G.node[n][0] - pb[0]) ** 2 + (G.node[n][1] - pb[1]) ** 2)
+        steps = max(1, int(G.dist(na, nb) / 25))
+        prev_ = na
+        for j in range(1, steps + 1):
+            if j == steps:
+                nid = nb
+            else:
+                nid = -500000 - k_ * 1000 - j
+                t_ = j / steps
+                G.node[nid] = (G.node[na][0] + (G.node[nb][0] - G.node[na][0]) * t_,
+                               G.node[na][1] + (G.node[nb][1] - G.node[na][1]) * t_)
+            d_ = G.dist(prev_, nid)
+            G.adj.setdefault(prev_, []).append((nid, d_ * 0.9, wi_))
+            G.adj.setdefault(nid, []).append((prev_, d_ * 0.9, wi_))
+            G.ways[wi_]["nodes"].append(prev_)
+            prev_ = nid
+        G.ways[wi_]["nodes"].append(nb)
+    if c.get("fix_gaps"):
+        G.fix_gaps()
     # ---- afinar la calibracion de la imagen: cada punto con nombre se 'pega' a su calle real
     pxs = [r[0] if isinstance(r[0], tuple) else r for r in c["route"]]
     segs_by_name = {}
@@ -419,9 +487,9 @@ def build_route_graph(key, c):
     dirs, ows, lys = np.array(dirs), np.array(ows), np.array(lys)
 
     def snap(ll, allow, name=None, travel=None):
-        ok0 = np.isin(cls, allow)
+        ok0 = np.isin(cls, c.get("snap_classes", allow))
         ok = ok0.copy()
-        if travel is not None:                          # calles de un sentido: solo la calzada que va hacia alla
+        if travel is not None and not c.get("any_dir"):  # calles de un sentido: solo la calzada que va hacia alla
             ok &= ~(ows & ((dirs @ travel) < 0.2))
         if name == "@arriba":                          # cualquier calzada elevada (segundo piso)
             okn = ok & (lys >= 2)
@@ -495,7 +563,12 @@ def build_route_graph(key, c):
             try:
                 p = G.path(a, b, allow, prev=prv)
             except RuntimeError:                            # punto en calle cerrada: se permite regresar
-                p = G.path(a, b, allow, prev=None)
+                try:
+                    p = G.path(a, b, allow, prev=None)
+                except RuntimeError:
+                    print(f"   (aviso) punto {i + 1} sin conexion: se salta")
+                    wps[i + 1] = wps[i]
+                    continue
         seq += p if not seq else p[1:]
     closing = seq[-1][0] == seq[0][0]
     body = remove_loops(seq[:-1] if closing else seq, G)
@@ -552,6 +625,8 @@ LANDMARKS = {
                     "angel": (19.4270032, -99.1676682), "monumento": (19.4361745, -99.1546214),
                     "basilica": (19.4848583, -99.1178571)},
     "tangamanga": {"autodromo": (22.1827632, -100.990942)},
+    "cozumel": {"plaza": (20.5108, -86.9498), "museo": (20.5131459, -86.9478283), "puntasur": (20.2990492, -87.0051426),
+                "cedral": (20.367614, -86.993528)},
     "slp": {"jardin": (22.1879, -100.9366), "hospital": (22.1159575, -100.9859511),
             "politecnica": (22.1210642, -100.9843394), "cruzroja": (22.1400232, -100.9729303),
             "catedral": (22.1516379, -100.9755156), "cajadelagua": (22.1454392, -100.9742005),
@@ -1059,6 +1134,43 @@ def process(key):
                      "b": 1 if t.get("bridge", "no") not in ("no", "") else 0,
                      "t": 1 if t.get("tunnel", "no") in ("yes", "building_passage") else 0,
                      "p": [[round(a, 1), round(b, 1)] for a, b in poly], "r": 1 if wi in set(W.tolist()) else 0})
+    if c.get("coast"):
+        la_ = np.array([q[0] for q in simp])
+        lo_ = np.array([q[1] for q in simp])
+        mm = 0.05
+        qc = (f'[out:json][timeout:300];way["natural"="coastline"]({la_.min() - mm:.4f},{lo_.min() - mm:.4f},'
+              f'{la_.max() + mm:.4f},{lo_.max() + mm:.4f});out body;>;out skel qt;')
+        rc = overpass(qc, key + "_costa")
+        nd = {e["id"]: (e["lat"], e["lon"]) for e in rc["elements"] if e["type"] == "node"}
+        segs = [e["nodes"] for e in rc["elements"] if e["type"] == "way"]
+        rings = []
+        while segs:                                       # unir los tramos de costa en anillos cerrados
+            cur = segs.pop(0)
+            changed = True
+            while changed and cur[0] != cur[-1]:
+                changed = False
+                for k_, sg in enumerate(segs):
+                    if sg[0] == cur[-1]:
+                        cur = cur + sg[1:]
+                    elif sg[-1] == cur[0]:
+                        cur = sg[:-1] + cur
+                    else:
+                        continue
+                    segs.pop(k_)
+                    changed = True
+                    break
+            rings.append(cur)
+        for ring in rings:
+            pp = [proj(*nd[x]) for x in ring if x in nd]
+            if len(pp) < 20:
+                continue
+            simp_ = [pp[0]]
+            for q in pp[1:]:                              # simplificar: un punto cada ~25 m
+                if math.hypot(q[0] - simp_[-1][0], q[1] - simp_[-1][1]) > 25:
+                    simp_.append(q)
+            feats["areas"].append({"k": "land", "p": [[round(a, 1), round(b, 1)] for a, b in simp_ + [simp_[0]]],
+                                   "n": "isla"})
+        print(f"   costa: {len(rings)} anillos")
     if c.get("park"):
         calp = fit_affine(c["ref_park"])
         poly = [[round(v, 1) for v in proj(*px_to_ll(q, calp))] for q in c["park"]]
