@@ -23,6 +23,9 @@ PISTAS
                        Romero (Politecnica, Hospital del Nino y la Mujer), Periferico, Tangamanga, Mariano
                        Jimenez, Damian Carmona, Rio Santiago, Acceso Norte, Av. Soledad, Citadina y
                        Av. Hidalgo. Feria de la Enchilada (noche). Musica: "music_feria".
+  PARQUE TANGAMANGA II 6.4 km (2 vueltas): sale del Autodromo Tangamanga (pianos en las curvas), recorre los
+                       caminos del parque y regresa. Bosque con miles de arboles y publico en vallas en todo
+                       el recorrido. Ruta = trazo del usuario calibrado con las glorietas reales.
   Los datos de las calles estan en la carpeta mapas_osm/ (se generan con gtc_mapas_osm.py).
   Datos (c) colaboradores de OpenStreetMap, licencia ODbL.
 
@@ -98,7 +101,7 @@ class MapDef:
                  extras=("papel",), stands=4, bridges=2, pits=True, builder="auto", venue=None, landmarks=(),
                  urban=False, ped_bridges=0, fans=0.75, signs=None, band_sign=10, music_dir="music",
                  palette=None, fireworks=False, pads=0, city_margin=750.0, city_step=34.0, detail_dist=400.0,
-                 osm=None, datum=None):
+                 osm=None, datum=None, fan_rate=0.45, fan_density=1.0, forest=0):
         self.key, self.name, self.subtitle = key, name, subtitle
         self.control, self.scale = list(control), scale
         self.stadium, self.stadium_scale = stadium, stadium_scale
@@ -116,6 +119,7 @@ class MapDef:
         self.palette, self.fireworks, self.pads = palette, fireworks, pads
         self.city_margin, self.city_step, self.detail_dist = city_margin, city_step, detail_dist
         self.osm, self.datum = osm, datum
+        self.fan_rate, self.fan_density, self.forest = fan_rate, fan_density, forest
         self.length = None
 
     def w(self, p):
@@ -204,6 +208,14 @@ MAPS = [
                   13: ((235, 235, 235), (255, 255, 255), "UNIVERSIDAD CRUZ ROJA", (210, 20, 30)),
                   14: ((20, 50, 110), (40, 80, 160), "UNIVERSIDAD POLITÉCNICA", (255, 255, 255))},
            band_sign=10, music_dir="music_feria"),
+    MapDef("tangamanga", "PARQUE TANGAMANGA II", "San Luis Potosí · autódromo y bosque",
+           control=SLP_ROUTE, scale=5.5, laps=2, concert=False, builder="osm", osm="tangamanga", urban=True,
+           ground="bosque", volcanoes=False, fans=1.0, fan_rate=0.95, fan_density=1.6, forest=3500,
+           extras=("tribunas",),
+           signs={1: ((0, 100, 60), (20, 140, 80), "PARQUE TANGAMANGA II", (255, 255, 255)),
+                  9: ((20, 20, 24), (60, 60, 70), "AUTÓDROMO TANGAMANGA", (255, 215, 40)),
+                  2: ((200, 30, 40), (240, 60, 60), "¡VAMOS SAN LUIS!", (255, 255, 255))},
+           music_dir="music_feria"),
     # --- aqui van las pistas nuevas ---
 ]
 
@@ -785,6 +797,22 @@ def building_hd(g, crowd, rnd, c, f, o, hl, hdp, h, col, shop=True, roof_fans=Fa
             crowd.add(p[0], h, p[1], -o[0], -o[1], rnd)
 
 
+def forest_tree(g, x, z, s, rnd):
+    """Arbol de bosque ligero (pocos triangulos: se siembran miles)."""
+    fcyl(g, x, z, 0, 2.4 * s, 0.22 * s, rgb(84, 60, 40), mat(M_BARK, 0.9), seg=5, r1=0.15 * s, cap=False)
+    r_ = rnd.random()
+    if r_ < 0.45:                                                         # pino
+        leaf = rgb(*[int(v * rnd.uniform(0.8, 1.15)) for v in (34, 88, 42)])
+        fcyl(g, x, z, 1.6 * s, 6.5 * s, 2.3 * s, leaf, mat(M_LEAF, 0.8), seg=7, r1=0.15 * s)
+        fcyl(g, x, z, 4.6 * s, 8.6 * s, 1.6 * s, leaf, mat(M_LEAF, 0.8), seg=7, r1=0.05 * s)
+    elif r_ < 0.6:                                                        # jacaranda
+        col = rgb(*[int(v * rnd.uniform(0.88, 1.1)) for v in (150, 100, 205)])
+        sphere(g, (x, 3.8 * s, z), 2.3 * s, col, mat(M_LEAF, 0.8), seg=7, rings=4, scale=(1, 0.75, 1))
+    else:                                                                 # mezquite / fresno
+        leaf = rgb(*[int(v * rnd.uniform(0.8, 1.15)) for v in (62, 110, 46)])
+        sphere(g, (x, 3.6 * s, z), 2.6 * s, leaf, mat(M_LEAF, 0.8), seg=7, rings=4, scale=(1, 0.8, 1))
+
+
 def jacaranda_hd(g, x, z, s, rnd):
     fcyl(g, x, z, 0, 3.0 * s, 0.22 * s, rgb(80, 60, 45), mat(M_BARK, 0.9), seg=6, r1=0.16 * s, cap=False)
     for _ in range(3):
@@ -1196,6 +1224,19 @@ def monumento_rev_hd(g, track, i, lights):
     """Monumento a la Revolucion: la pista pasa por debajo de sus cuatro arcos."""
     p, t, nr = track.pts[i], track.tan[i], track.nrm[i]
     H = LIMIT + 10.0
+    rw_ = getattr(track, "rw", None)
+    for _ in range(12):                                       # pilares (7 m) fuera de la calle
+        ok = True
+        for a in (-1, 1):
+            for b in (-1, 1):
+                c = p + t * a * (H - 4) + nr * b * (H - 4)
+                d = np.hypot(track.pts[:, 0] - c[0], track.pts[:, 1] - c[1])
+                lim = (rw_ if rw_ is not None else np.full(track.n, HW)) + 1.6 + 7.2
+                if (d < lim).any():
+                    ok = False
+        if ok:
+            break
+        H += 2.0
     stone, dark = rgb(132, 124, 112), rgb(96, 90, 82)
     ms = mat(M_CONC, 0.8)
     for a in (-1, 1):
@@ -2254,6 +2295,8 @@ class OSMTrack(MapTrack):
         self.br = np.array(d["br"], bool)
         self.tu = np.array(d["tu"], bool)
         self.ow = np.array(d.get("ow", [0] * n), bool)
+        self.race = np.array([str(d["names"][k]).startswith("Autódromo") for k in d["name"]], bool)
+        self.ow |= self.race
         self.ln = np.array(d.get("ln", [2] * n), int)
         self.cls = np.array(d["cls"], int)
         self.name_idx = np.array(d["name"], int)
@@ -2541,6 +2584,69 @@ def open_runs(mask):
     return out
 
 
+class StreetIndex:
+    """Calles dibujadas (segmentos con su medio ancho) para no poner edificios encima."""
+
+    def __init__(self, cell=20.0):
+        self.cell, self.G, self.seg = cell, {}, []
+
+    def add(self, a, b, half):
+        k = len(self.seg)
+        self.seg.append((np.asarray(a, float), np.asarray(b, float), float(half)))
+        lo, hi = np.minimum(a, b) - half, np.maximum(a, b) + half
+        for cx in range(int(lo[0] // self.cell), int(hi[0] // self.cell) + 1):
+            for cz in range(int(lo[1] // self.cell), int(hi[1] // self.cell) + 1):
+                self.G.setdefault((cx, cz), []).append(k)
+
+    def hit(self, Q, margin=0.5):
+        Q = np.asarray(Q, float).reshape(-1, 2)
+        for q in Q:
+            for k in self.G.get((int(q[0] // self.cell), int(q[1] // self.cell)), ()):
+                a, b, half = self.seg[k]
+                d = b - a
+                t = min(1.0, max(0.0, float(((q - a) @ d) / max(d @ d, 1e-9))))
+                if math.hypot(*(a + d * t - q)) < half + margin:
+                    return True
+        return False
+
+
+def footprint_probe(c, f, hl, hw, step=2.0):
+    """Puntos (cada ~2 m) que cubren un rectangulo orientado."""
+    f = v2(f)
+    r = np.array([-f[1], f[0]])
+    us = np.linspace(-hl, hl, max(2, int(2 * hl / step) + 2))
+    vs = np.linspace(-hw, hw, max(2, int(2 * hw / step) + 2))
+    return (v2(c)[None, None] + us[:, None, None] * f + vs[None, :, None] * r).reshape(-1, 2)
+
+
+class BuildingIndex:
+    """Plantas de edificios reales para preguntar si un punto cae dentro de alguno."""
+
+    def __init__(self, polys, cell=25.0):
+        self.polys = [np.asarray(p, float) for p in polys]
+        self.cell = cell
+        self.G = {}
+        for k, P in enumerate(self.polys):
+            if len(P) < 4:
+                continue
+            lo, hi = P.min(0), P.max(0)
+            for cx in range(int(lo[0] // cell), int(hi[0] // cell) + 1):
+                for cz in range(int(lo[1] // cell), int(hi[1] // cell) + 1):
+                    self.G.setdefault((cx, cz), []).append(k)
+
+    def inside(self, Q, grow=0.0):
+        Q = np.asarray(Q, float).reshape(-1, 2)
+        out = np.zeros(len(Q), bool)
+        for j, q in enumerate(Q):
+            for k in self.G.get((int(q[0] // self.cell), int(q[1] // self.cell)), ()):
+                P = self.polys[k]
+                lo, hi = P.min(0) - grow, P.max(0) + grow
+                if lo[0] <= q[0] <= hi[0] and lo[1] <= q[1] <= hi[1] and inside_poly(P, q[None])[0]:
+                    out[j] = True
+                    break
+        return out
+
+
 def route_grid(track, cell=12.0):
     """Indice espacial de las muestras de la ruta."""
     G = {}
@@ -2761,7 +2867,10 @@ def build_world_osm(track, md):
         return ((GY[ix_, iz_] * (1 - tx_) + GY[ix_ + 1, iz_] * tx_) * (1 - tz_) +
                 (GY[ix_, iz_ + 1] * (1 - tx_) + GY[ix_ + 1, iz_ + 1] * tx_) * tz_)
     gmin = float(GY.min())
-    grid(g, np.stack([GX, GY, GZ], -1), rgb(122, 118, 110), mat(M_CONC, 0.9), orient=(0, 1, 0))
+    if md.ground == "bosque":
+        grid(g, np.stack([GX, GY, GZ], -1), rgb(72, 110, 44), mat(M_GRASS, 0.95), orient=(0, 1, 0))
+    else:
+        grid(g, np.stack([GX, GY, GZ], -1), rgb(122, 118, 110), mat(M_CONC, 0.9), orient=(0, 1, 0))
     G2 = 7000
     for (x0, x1, z0, z1) in ((cxm - G2, lo[0], czm - G2, czm + G2), (hi[0], cxm + G2, czm - G2, czm + G2),
                              (lo[0], hi[0], czm - G2, lo[1]), (lo[0], hi[0], hi[1], czm + G2)):
@@ -2774,12 +2883,26 @@ def build_world_osm(track, md):
     if "stage" not in info:
         info.update({k: v for k, v in no_concert_info(track).items() if k not in info})
     # ---------------------------------------------------------------- la ruta: asfalto, lineas y orillas
-    allidx = np.append(np.arange(n), 0)
-    yR = h[allidx] + 0.06
-    lat5 = np.outer([-1, -0.5, 0, 0.5, 1], rw[allidx])
-    road_ribbon(g, track, allidx, lat5, yR[None, :], rgb(58, 58, 62), mat(hd.M_ASPH, 0.7),
-                uv_scale=(7.0 / rw[allidx])[None, :])
-    two_way = ~track.ow
+    # donde la ruta recorre otra vez la MISMA avenida (paralela y encimada) se dibuja una sola capa de asfalto
+    dup = np.zeros(n, bool)
+    for i in np.nonzero(track.partner >= 0)[0]:
+        j = track.partner[i]
+        if i > j and track.partner_d[i] < 3.0 and abs(tan[i] @ tan[j]) > 0.85 and rw[i] <= rw[j] + 0.6:
+            dup[i] = True
+    dup = np.convolve(dup.astype(float), np.ones(3), "same") > 1.5          # sin huecos sueltos
+    for r in (hd.runs(~dup) if dup.any() else [np.append(np.arange(n), 0)]):
+        lat5 = np.outer([-1, -0.5, 0, 0.5, 1], rw[r])
+        road_ribbon(g, track, r, lat5, (h[r] + 0.06)[None, :], rgb(58, 58, 62), mat(hd.M_ASPH, 0.7),
+                    uv_scale=(7.0 / rw[r])[None, :])
+    two_way = ~track.ow & ~dup
+    if track.race.any():                                                  # pianos rojo/blanco en las curvas
+        curvy = (np.abs(track.curv) > 1 / 60) & track.race
+        curvy = np.convolve(curvy.astype(float), np.ones(9), "same") > 0
+        for side in (-1, 1):
+            for r in hd.runs(curvy):
+                road_ribbon(g, track, r, np.array([rw[r] - 1.1, rw[r] - 0.6, rw[r]]) * side,
+                            np.array([h[r] + 0.075, h[r] + 0.13, h[r] + 0.09]), (1, 1, 1), mat(hd.M_CURB, 0.45),
+                            uv_scale=np.ones((1, len(r))))
     s_ = np.arange(n) * track.spacing
     for sgn in (-1, 1):                                                   # doble linea amarilla al centro
         m = two_way.copy()
@@ -2789,7 +2912,7 @@ def build_world_osm(track, md):
     dash = (s_ % 9.0) < 4.5
     for k in range(1, 6):                                                 # lineas de carril punteadas
         lanes = track.ln
-        m = (lanes > k) & dash & ~((two_way) & (lanes == 2 * k))
+        m = (lanes > k) & dash & ~((two_way) & (lanes == 2 * k)) & ~dup
         for r in hd.runs(m):
             lat = -rw[r] + 2 * rw[r] * k / lanes[r]
             road_ribbon(g, track, r, np.array([lat - 0.07, lat + 0.07]), (h[r] + 0.078)[None, :], (0.92, 0.92, 0.92),
@@ -2853,11 +2976,38 @@ def build_world_osm(track, md):
                  bottom=True)
             lights.append((float(pts[k][0]), h[k] + 4.8, float(pts[k][1]), 18.0, 1.0, 0.8, 0.55, 3.0))
     # ---------------------------------------------------------------- otras calles reales
+    bidx = BuildingIndex([b["p"] for b in d.get("bld", [])])
+    park_polys = [np.array(a["p"], float) for a in d.get("areas", []) if a["k"] == "bosque"]
+
+    def in_park(Q):
+        Q = np.asarray(Q, float).reshape(-1, 2)
+        out = np.zeros(len(Q), bool)
+        for P_ in park_polys:
+            out |= inside_poly(P_, Q)
+        return out
+    sidx_ = StreetIndex()
+
+    def clear_of_roads(Q, margin):
+        """Ningun punto sobre la ruta (con su ancho real) ni sobre una calle dibujada."""
+        Q = np.asarray(Q, float).reshape(-1, 2)
+        ii_, _, dd_ = nearest_route(track, rg, Q, 40)
+        okr = (ii_ < 0) | (dd_ > rw[np.maximum(ii_, 0)] + margin)
+        return bool(okr.all()) and not sidx_.hit(Q, 0.4)
     ways = []
     for w in d.get("ways", []):                                           # puntos cada 4 m (OSM los tiene muy separados)
         P = np.array(w["p"], float)
-        if len(P) < 2:
+        if len(P) < 2 or w["c"] in ("service",):                          # entradas a estacionamientos: no
             continue
+        if w["c"] in ("residential", "unclassified", "living_street") and not w.get("r"):
+            w = dict(w, w=min(float(w["w"]), 3.0))
+        elif w["c"] == "pedestrian":
+            w = dict(w, w=min(float(w["w"]), 2.5))
+        elif w["c"] == "raceway":
+            w = dict(w, w=4.5)
+        elif w["c"] == "track":
+            w = dict(w, w=2.2)
+        elif w["c"] in ("footway", "path"):
+            w = dict(w, w=1.1)
         Q = [P[0]]
         for a, b in zip(P[:-1], P[1:]):
             k = max(1, int(np.hypot(*(b - a)) / 4.0))
@@ -2882,6 +3032,10 @@ def build_world_osm(track, md):
             inside = (ii >= 0) & (dd < 45)                                # es la misma calle de la ruta: ya esta dibujada
         else:
             inside = (ii >= 0) & (dd < rw[np.maximum(ii, 0)] + wh * 0.8 - 0.4)
+        dq0 = np.gradient(P, axis=0)
+        dq0 /= np.maximum(np.hypot(dq0[:, 0], dq0[:, 1]), 1e-6)[:, None]
+        nq0 = np.column_stack([-dq0[:, 1], dq0[:, 0]]) * wh * 0.85
+        inside = inside | bidx.inside(P, 1.0) | bidx.inside(P + nq0, 1.0) | bidx.inside(P - nq0, 1.0)
         if w.get("b"):                                                    # paso superior / puente de otra calle
             dq_ = np.gradient(P, axis=0)
             dq_ /= np.maximum(np.hypot(dq_[:, 0], dq_[:, 1]), 1e-6)[:, None]
@@ -2925,7 +3079,10 @@ def build_world_osm(track, md):
                 PP[c_, :, 1] = yy[r]
             sl = np.concatenate([[0], np.cumsum(np.hypot(*np.diff(Q, axis=0).T))])
             UV = np.stack(np.broadcast_arrays(sl[None, :], np.array([-7.0, 7.0])[:, None]), -1).astype(F4)
-            grid(g, PP, rgb(56, 56, 60), mat(hd.M_ASPH, 0.75), UV=UV, orient=(0, 1, 0))
+            if w["c"] in ("track", "footway", "path"):                    # caminos del parque: tierra / grava
+                grid(g, PP, rgb(170, 152, 118), mat(M_GRAVEL, 0.95), UV=UV, orient=(0, 1, 0))
+            else:
+                grid(g, PP, rgb(56, 56, 60), mat(hd.M_ASPH, 0.75), UV=UV, orient=(0, 1, 0))
             if w.get("b"):                                                # puente de otra calle: losa, vigas, columnas
                 for c_, sg in enumerate((-1, 1)):
                     PW = PP.copy()
@@ -2943,6 +3100,8 @@ def build_world_osm(track, md):
             for j in range(len(Q) - 1):                                   # la calle no se llena de edificios
                 a, b = Q[j], Q[j + 1]
                 L = np.hypot(*(b - a))
+                if not w.get("b"):
+                    sidx_.add(a, b, wh)
                 if L > 0.5:
                     occ.rect((a + b) / 2, (b - a) / L, L / 2 + 1.0, wh + 2.4)
     # ---------------------------------------------------------------- edificios reales (OSM)
@@ -3072,7 +3231,8 @@ def build_world_osm(track, md):
             spi = [q % n for q in span]
             fd = rw[i] + 0.3 + sw_des[i]
             bad = (np.abs(off[spi]).max() > 0.4 or mouth[spi, 1 if side > 0 else 0].any() or
-                   np.isfinite(wall[spi]).any() or track.cls[i] <= 1 or track.cls[i] >= 10)
+                   np.isfinite(wall[spi]).any() or track.cls[i] <= 1 or track.cls[i] >= 10 or
+                   (park_polys and in_park(pts[i] + nrm[i] * side * (rw[i] + 8))[0]))
             if bad:
                 s += 3.0
                 continue
@@ -3082,6 +3242,7 @@ def build_world_osm(track, md):
             corners = np.array([c + f * a + o * b for a in (-wdt / 2, 0.0, wdt / 2) for b in (-dp / 2, 0.0, dp / 2)])
             cells = occ.cells(c, f, wdt / 2, dp / 2)
             if (track.nearest_dist(corners) >= fd - 0.6).all() and occ.free(cells) and \
+                    clear_of_roads(footprint_probe(c, f, wdt / 2, dp / 2), 0.8) and \
                     not (zones.hit(corners) | openz.hit(corners)).any():
                 hh = rnd.choice(stories_by.get(int(track.cls[i]), [2, 3])) * 3.6 + 0.4
                 corner = any(abs(((i - j) + n // 2) % n - n // 2) * track.spacing < 14 for j, _, _ in inters)
@@ -3159,11 +3320,11 @@ def build_world_osm(track, md):
         k = 0
         while k < n:
             ln_ = rnd.randint(15, 60)
-            if near_lm[k] or rnd.random() < md.fans * 0.45:
+            if near_lm[k] or rnd.random() < md.fans * md.fan_rate:
                 valla[[(k + q) % n for q in range(ln_)], sidx] = True
-            k += ln_ + rnd.randint(5, 40)
+            k += ln_ + (rnd.randint(2, 8) if md.fan_rate >= 0.9 else rnd.randint(5, 40))
     for sidx, wall in ((1, wpos), (0, wneg)):
-        m = valla[:, sidx] & (wall > rw + 3.0) & (np.abs(off) < 0.4) & ~mouth[:, sidx] & ~shared[:, sidx]
+        m = valla[:, sidx] & (wall > rw + (2.4 if md.fan_rate >= 0.9 else 3.0)) & (np.abs(off) < 0.4) &             ~mouth[:, sidx] & ~shared[:, sidx]
         valla[:, sidx] = m
         wall[m] = rw[m] + 1.3
     for wall in (wpos, wneg):                                             # la pared se angosta poco a poco
@@ -3192,7 +3353,7 @@ def build_world_osm(track, md):
                         rgb(120, 125, 130), mat(M_METAL, 0.4, 0.7))
             for k in r[::2]:
                 far = min(fac[sidx][k], rw[k] + 0.3 + max(sw_des[k], 1.0) + 1.5) - 0.4
-                for _ in range(rnd.randint(2, 5)):
+                for _ in range(int(rnd.randint(2, 5) * md.fan_density)):
                     lt = rnd.uniform(rw[k] + 1.7, max(rw[k] + 1.8, far))
                     q = pts[k] + nrm[k] * side * lt + tan[k] * rnd.uniform(-1.5, 1.5)
                     crowd.add(q[0], h[k] + 0.19, q[1], -nrm[k, 0] * side, -nrm[k, 1] * side, rnd)
@@ -3208,6 +3369,28 @@ def build_world_osm(track, md):
                  bottom=True)
             if k % 26 == 4:
                 lights.append((float(tip[0]), h[k] + 8.6, float(tip[1]), 36.0, 1.0, 0.72, 0.42, 3.2))
+    # ---------------------------------------------------------------- tribunas de la salida (si hay espacio)
+    if "tribunas" in md.extras:
+        put = 0
+        for i0 in (8, 40, n - 40):
+            for side in (1, -1):
+                if put >= 3:
+                    break
+                o = nrm[i0] * side
+                wall_ = wpos if side > 0 else wneg
+                base_ = pts[i0] + o * (rw[i0] + 3.2)
+                L_ = 60.0
+                probe = footprint_probe(base_ + tan[i0] * L_ / 2 + o * 7, tan[i0], L_ / 2, 7.5, 3.0)
+                if not clear_of_roads(probe, 2.0) or bidx.inside(probe).any() or \
+                        not occ.free(occ.cells(base_ + tan[i0] * L_ / 2 + o * 7, tan[i0], L_ / 2, 7.5)):
+                    continue
+                y0 = float(h[i0])
+                placed(g, crowd, lights, y0, lambda tg, tc, tl: grandstand_hd(
+                    tg, tc, rnd, base_, tan[i0], o, L_, 12, 0.9, 0.5, rnd.choice(
+                        [rgb(30, 80, 190), rgb(220, 120, 30), rgb(190, 40, 40), rgb(40, 150, 70)]), 8, tl))
+                occ.rect(base_ + tan[i0] * L_ / 2 + o * 7, tan[i0], L_ / 2 + 1, 8)
+                put += 1
+                break
     # ---------------------------------------------------------------- semaforos y cebras en los cruces
     for j, sd, ci in inters:
         if ci > 7:
@@ -3234,16 +3417,18 @@ def build_world_osm(track, md):
     C = C[(Dr > 20) & (Dr < fill)]
     Dr = track.nearest_dist(C)
     blocked = zones.hit(C) | openz.hit(C)
+    if park_polys:
+        blocked |= in_park(C)
     CY = T(C)
     for c, dist, bl_, yb in zip(C, Dr, blocked, CY):
         if bl_:
             continue
         w_, dp_ = rnd.uniform(6, 11), rnd.uniform(6, 11)
         cells = occ.cells(c, (1, 0), w_, dp_)
-        if not occ.free(cells):
+        if not occ.free(cells) or not clear_of_roads(footprint_probe(c, (1, 0), w_, dp_, 3.0), 1.5):
             w_, dp_ = w_ * 0.6, dp_ * 0.6
             cells = occ.cells(c, (1, 0), w_, dp_)
-            if not occ.free(cells):
+            if not occ.free(cells) or not clear_of_roads(footprint_probe(c, (1, 0), w_, dp_, 3.0), 1.5):
                 continue
         occ.add(cells)
         hh = rnd.choice(STORIES) * 3.4 + 0.4
@@ -3257,7 +3442,11 @@ def build_world_osm(track, md):
         P = np.array(a["p"], float)
         if len(P) < 4 or k in ("runway", "taxiway", "apron", "terminal", "stadium"):
             continue
-        col = {"water": rgb(36, 70, 92), "park": rgb(72, 118, 46), "garden": rgb(80, 126, 52),
+        if k == "bosque" and md.ground == "bosque":
+            col = rgb(72, 110, 44)
+        else:
+            col = None
+        col = col or {"water": rgb(36, 70, 92), "park": rgb(72, 118, 46), "garden": rgb(80, 126, 52),
                "grass": rgb(86, 130, 56), "pitch": rgb(60, 130, 50), "forest": rgb(46, 90, 36),
                "wood": rgb(46, 90, 36), "recreation_ground": rgb(78, 122, 50), "cemetery": rgb(96, 120, 70),
                "playground": rgb(170, 140, 100), "meadow": rgb(96, 130, 60), "scrub": rgb(90, 110, 60)}.get(k)
@@ -3282,6 +3471,34 @@ def build_world_osm(track, md):
         V = V[:, [0, 1, 2, 0, 2, 3]].reshape(-1, 3)
         g.tris(V, (0.0, 1.0, 0.0), col, mat(M_DEF, 0.06, 0.25) if k == "water" else mat(M_GRASS, 0.95),
                V[:, [0, 2]])
+        if k == "bosque" and md.forest:                                   # bosque del parque
+            mn, mx = P.min(0), P.max(0)
+            area = 0.5 * abs(np.dot(P[:-1, 0], P[1:, 1]) - np.dot(P[1:, 0], P[:-1, 1]))
+            want = int(min(md.forest, area / 60))
+            TP = np.column_stack([np.array([rnd.uniform(mn[0], mx[0]) for _ in range(want * 3)]),
+                                  np.array([rnd.uniform(mn[1], mx[1]) for _ in range(want * 3)])])
+            ri_ = np.array([rnd.randrange(n) for _ in range(want * 2)])  # la mitad, cerca del camino (se ven)
+            off_ = np.array([rnd.choice((-1, 1)) * rnd.uniform(4.5, 60.0) for _ in range(want * 2)])
+            TB = pts[ri_] + nrm[ri_] * (np.sign(off_) * rw[ri_] + off_)[:, None]
+            TP = np.concatenate([TB, TP])
+            TP = TP[inside_poly(P, TP)]
+            ti_, _, td_ = nearest_route(track, rg, TP, 40)
+            ok_r = (ti_ < 0) | (td_ > rw[np.maximum(ti_, 0)] + 3.5)
+            TP, ty_ = TP[ok_r], gh(TP[ok_r])
+            put_ = 0
+            for (x, z), yt in zip(TP, ty_):
+                if put_ >= want:
+                    break
+                if sidx_.hit([(x, z)], 1.2) or bidx.inside([(x, z)], 1.0).any():
+                    continue
+                if not occ.free(occ.cells((x, z), (1, 0), 1.2, 1.2)):
+                    continue
+                tg = Geo()
+                forest_tree(tg, x, z, rnd.uniform(0.9, 1.5), rnd)
+                g.merge(lift_geo(tg, yt + 0.02))
+                put_ += 1
+            print(f"   bosque: {put_} arboles")
+            continue
         if k in ("park", "garden", "forest", "wood", "recreation_ground"):
             mn, mx = P.min(0), P.max(0)
             area = 0.5 * abs(np.dot(P[:-1, 0], P[1:, 1]) - np.dot(P[1:, 0], P[:-1, 1]))
@@ -3363,6 +3580,8 @@ def build_world_osm(track, md):
         a = rnd.uniform(0, TAU)
         r = rnd.uniform(span + 200, span + 1800)
         x, z = cxm + r * math.cos(a), czm + r * math.sin(a)
+        if track.nearest_dist(np.array([[x, z]]))[0] < 350:
+            continue
         w_, dp_ = rnd.uniform(25, 60), rnd.uniform(25, 60)
         hh = rnd.choice([12, 18, 25, 35, 50, 70, 90])
         fbox(g, (x, z), (1, 0), w_ / 2, dp_ / 2, gmin - 1, gmin + hh, rnd.choice(FACADES), mat(M_WINDOWS, 0.4, 0.1))
@@ -3830,6 +4049,7 @@ class GameMaps(hd.GameHD):
             rate = 9.0                                      # soltar o cambiar de lado: rapido
         cur += hd.clamp(st - cur, -rate * dt, rate * dt)
         self._st_in = cur
+        cur = st + (cur - st) * hi                          # a baja velocidad: exactamente como siempre
         # 2) la misma fraccion de volante = la misma fraccion del agarre, a cualquier velocidad
         if v > self.STEER_V0 and not hb:
             k = min(1.0, self._steer_sat(v, p.grip) / self._steer_sat(self.STEER_V0, p.grip))

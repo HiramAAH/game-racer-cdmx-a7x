@@ -93,6 +93,37 @@ CIRCUITS = {
         # Jardin Hidalgo de Soledad (meta), calle Zaragoza y Plaza Citadina
         fixed={0: (22.1879, -100.9366), 1: (22.1908, -100.9373), 2: (22.1990, -100.9386), 26: (22.1824, -100.9501)},
         legs={14: "foot", 15: "foot", 16: "foot"}, soft_start=True),
+    "tangamanga": dict(
+        # glorietas del parque (imagen 13 del usuario) con su coordenada real (OpenStreetMap)
+        ref=[((268, 108), (22.18638, -100.99249)), ((233, 375), (22.18152, -100.99318)),
+             ((905, 222), (22.18425, -100.97987)), ((873, 607), (22.17725, -100.98054))],
+        trace=True,                 # la ruta es el trazo tal cual (autodromo + caminos del parque)
+        route=[(352, 321), (370, 320), (400, 321), (430, 322), (452, 323), (448, 305), (440, 290), (428, 272),
+               (415, 258), (400, 245), (385, 232), (368, 218), (352, 205), (337, 194), (325, 180), (315, 163),
+               (308, 150), (302, 138), (295, 132), (285, 130), (270, 129), (255, 126), (248, 118), (248, 103),
+               (244, 94), (234, 91), (224, 96), (217, 105), (208, 110), (201, 105), (200, 95), (208, 87),
+               (222, 79), (238, 72), (255, 66), (275, 65), (300, 65), (320, 65), (335, 68), (345, 76), (355, 90),
+               (368, 108), (380, 122), (392, 140), (405, 160), (420, 177), (440, 197), (455, 215), (468, 235),
+               (480, 255), (492, 275), (503, 293), (512, 308), (522, 319), (540, 319), (560, 318), (600, 300),
+               (640, 285), (680, 272), (720, 262), (760, 255), (800, 245), (840, 238), (868, 233), (880, 226),
+               (888, 215), (898, 210), (910, 210), (920, 218), (923, 230), (915, 240), (908, 252), (907, 270),
+               (905, 300), (900, 350), (893, 400), (887, 450), (880, 500), (877, 550), (877, 584), (887, 591),
+               (893, 603), (892, 618), (880, 625), (862, 624), (856, 612), (855, 592), (840, 588), (800, 585),
+               (760, 583), (720, 580), (690, 577), (670, 560), (645, 530), (620, 500), (595, 470), (575, 445),
+               (560, 428), (545, 410), (530, 390), (520, 375), (505, 368), (490, 368), (475, 367), (465, 358),
+               (460, 345), (456, 335), (445, 332), (420, 330), (390, 330), (360, 329), (330, 329), (300, 326),
+               (270, 323), (240, 321), (200, 316), (170, 312), (145, 305), (125, 295), (117, 283), (125, 272),
+               (140, 266), (155, 265), (170, 271), (185, 282), (200, 296), (220, 308), (240, 313), (262, 313),
+               (280, 306), (293, 290), (296, 272), (298, 258), (308, 251), (320, 250), (337, 257), (355, 265),
+               (375, 270), (392, 272), (400, 276), (403, 286), (401, 296), (380, 297), (350, 297), (332, 298),
+               (324, 306), (322, 316), (334, 320)],
+        # contorno del parque (zona verde de la imagen 12) para el bosque
+        ref_park=[((260, 98), (22.18638, -100.99249)), ((222, 365), (22.18152, -100.99318)),
+                  ((896, 214), (22.18425, -100.97987)), ((866, 600), (22.17725, -100.98054))],
+        park=[(62, 278), (120, 180), (195, 68), (330, 42), (470, 210), (590, 285), (630, 195), (950, 160),
+              (1000, 330), (1052, 530), (880, 600), (700, 700), (605, 772), (500, 660), (400, 610), (290, 560),
+              (180, 470)],
+        legs={}, fixed={}),
 }
 
 
@@ -291,7 +322,7 @@ def build_route_graph(key, c):
     lo = np.array([w[1] for w in wps])
     m = 0.008
     bbox = (la.min() - m, lo.min() - m, la.max() + m, lo.max() + m)
-    hw = "|".join(DRIVE + WALK)
+    hw = "|".join(DRIVE + WALK + ("raceway",))
     q = (f'[out:json][timeout:300];way["highway"~"^({hw})$"]({bbox[0]:.5f},{bbox[1]:.5f},{bbox[2]:.5f},'
          f'{bbox[3]:.5f});out body;>;out skel qt;')
     G = Graph(overpass(q, key + "_calles"))
@@ -471,6 +502,7 @@ LANDMARKS = {
     "chapultepec": {"museo": (19.4261524, -99.1866516), "castillo": (19.4204632, -99.1820866),
                     "angel": (19.4270032, -99.1676682), "monumento": (19.4361745, -99.1546214),
                     "basilica": (19.4848583, -99.1178571)},
+    "tangamanga": {"autodromo": (22.1827632, -100.990942)},
     "slp": {"jardin": (22.1879, -100.9366), "hospital": (22.1159575, -100.9859511),
             "politecnica": (22.1210642, -100.9843394), "cruzroja": (22.1400232, -100.9729303),
             "catedral": (22.1516379, -100.9755156), "cajadelagua": (22.1454392, -100.9742005),
@@ -568,9 +600,44 @@ def elevations(ll):
     return a
 
 
+def build_route_trace(key, c):
+    """La ruta es el trazo del usuario tal cual (calibrado). Se agregan nodos y calles sinteticas al grafo."""
+    cal = fit_affine(c["ref"])
+    wps = [px_to_ll(p, cal) for p in c["route"]]
+    la = np.array([w[0] for w in wps])
+    lo = np.array([w[1] for w in wps])
+    m = 0.008
+    bbox = (la.min() - m, lo.min() - m, la.max() + m, lo.max() + m)
+    hw = "|".join(DRIVE + WALK + ("raceway",))
+    q = (f'[out:json][timeout:300];way["highway"~"^({hw})$"]({bbox[0]:.5f},{bbox[1]:.5f},{bbox[2]:.5f},'
+         f'{bbox[3]:.5f});out body;>;out skel qt;')
+    G = Graph(overpass(q, key + "_calles"))
+    kx = 111320 * math.cos(math.radians(float(la.mean())))
+    race = np.array([G.node[n] for w in G.ways if w.get("tags", {}).get("highway") == "raceway"
+                     for n in w["nodes"] if n in G.node]).reshape(-1, 2)
+    G.ways.append({"tags": {"highway": "raceway", "name": "Autódromo Tangamanga", "width": "11"}, "nodes": []})
+    wa = len(G.ways) - 1
+    G.ways.append({"tags": {"highway": "unclassified", "name": c.get("park_name", "Parque Tangamanga II"),
+                            "width": "8"}, "nodes": []})
+    wb = len(G.ways) - 1
+    body = []
+    for k, ll in enumerate(wps):                    # un punto cada ~8 m a lo largo del trazo
+        nxt = wps[(k + 1) % len(wps)]
+        dist = math.hypot((nxt[1] - ll[1]) * kx, (nxt[0] - ll[0]) * 110574)
+        steps = max(1, int(dist / 8))
+        for j in range(steps):
+            t = j / steps
+            p = (ll[0] + (nxt[0] - ll[0]) * t, ll[1] + (nxt[1] - ll[1]) * t)
+            nid = -1000 - len(body)
+            G.node[nid] = p
+            on_race = len(race) and np.min(np.hypot((race[:, 1] - p[1]) * kx, (race[:, 0] - p[0]) * 110574)) < 18
+            body.append((nid, wa if on_race else wb))
+    return G, body, cal, wps
+
+
 def process(key):
     c = CIRCUITS[key]
-    G, body, cal, wps = build_route_graph(key, c)
+    G, body, cal, wps = (build_route_trace if c.get("trace") else build_route_graph)(key, c)
     nodes = [n for n, _ in body]
     wis = [wi for _, wi in body]
     wis[0] = wis[1] if wis[0] is None else wis[0]
@@ -929,7 +996,7 @@ def process(key):
     for wi, w in enumerate(G.ways):
         t = w.get("tags", {})
         hwc = t.get("highway", "")
-        if hwc not in DRIVE and hwc not in ("pedestrian",):
+        if hwc not in DRIVE and hwc not in ("pedestrian", "raceway", "track", "footway", "path"):
             continue
         ns = [x for x in w["nodes"] if x in G.node]
         if len(ns) < 2:
@@ -943,6 +1010,10 @@ def process(key):
                      "b": 1 if t.get("bridge", "no") not in ("no", "") else 0,
                      "t": 1 if t.get("tunnel", "no") in ("yes", "building_passage") else 0,
                      "p": [[round(a, 1), round(b, 1)] for a, b in poly], "r": 1 if wi in set(W.tolist()) else 0})
+    if c.get("park"):
+        calp = fit_affine(c["ref_park"])
+        poly = [[round(v, 1) for v in proj(*px_to_ll(q, calp))] for q in c["park"]]
+        feats["areas"].append({"k": "bosque", "p": poly + [poly[0]], "n": c.get("park_name", "Parque")})
     lm = {}
     for k_, (la, lo) in LANDMARKS.get(key, {}).items():
         lm[k_] = [round(v, 1) for v in proj(la, lo)]
