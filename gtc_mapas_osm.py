@@ -93,6 +93,18 @@ CIRCUITS = {
         # Jardin Hidalgo de Soledad (meta), calle Zaragoza y Plaza Citadina
         fixed={0: (22.1879, -100.9366), 1: (22.1908, -100.9373), 2: (22.1990, -100.9386), 26: (22.1824, -100.9501)},
         legs={14: "foot", 15: "foot", 16: "foot"}, soft_start=True),
+    "segundopiso": dict(
+        ll=True, strict=True, margin=0.02, ref=[((0, 0), (0.0, 0.0)), ((1, 0), (0.0, 1.0)), ((0, 1), (1.0, 0.0))],
+        # Periferico Sur: se sube al Segundo Piso en San Antonio, se baja antes de Las Aguilas y se regresa
+        # por abajo (pasando debajo del puente por el que se fue)
+        route=[(19.3828, -99.1914, "Anillo Periférico"), (19.3760, -99.1921, "Anillo Periférico"),
+               (19.3740, -99.1921, "Anillo Periférico"), (19.3700, -99.1914, "Anillo Periférico"),
+               (19.3650, -99.1903, "Anillo Periférico"), (19.3605, -99.1920, "Anillo Periférico"),
+               (19.3570, -99.1975, "Anillo Periférico"),
+               (19.3580, -99.1960, "@arriba"), (19.3620, -99.1912, "@arriba"), (19.3680, -99.1906, "@arriba"),
+               (19.3730, -99.1918, "@arriba")],
+        free_last=True, free_legs=(6,),
+        legs={}, fixed={}),
     "tangamanga": dict(
         # glorietas del parque (imagen 13 del usuario) con su coordenada real (OpenStreetMap)
         ref=[((268, 108), (22.18638, -100.99249)), ((233, 375), (22.18152, -100.99318)),
@@ -190,6 +202,8 @@ class Graph:
         self.node = {e["id"]: (e["lat"], e["lon"]) for e in osm["elements"] if e["type"] == "node"}
         self.ways = [e for e in osm["elements"] if e["type"] == "way" and "nodes" in e]
         self.adj = {}
+        self.wrongway = set()
+        self.strict = False                              # True = respetar siempre el sentido de las vias
         for wi, w in enumerate(self.ways):
             t = w.get("tags", {})
             hw = t.get("highway", "road").replace("_link", "")
@@ -206,6 +220,8 @@ class Graph:
                 for u, v in ((a, b), (b, a)):
                     pen = 1.35 if (ow and (u, v) != fwd) else 1.0    # contra el sentido: se permite, pero cuesta
                     self.adj.setdefault(u, []).append((v, d * k * pen, wi))
+                    if pen > 1.0:
+                        self.wrongway.add((u, v))
 
     def dist(self, a, b):
         (la, oa), (lb, ob) = self.node[a], self.node[b]
@@ -254,10 +270,17 @@ class Graph:
                 continue
             d0 = vec(p, u) if p is not None else None
             for v, c, wi in self.adj.get(u, ()):
+                if self.strict and (u, v) in self.wrongway:
+                    continue
                 if v == p or self.ways[wi].get("tags", {}).get("highway", "") not in allow:
                     continue
-                if only is not None and norm_name(self.ways[wi].get("tags", {}).get("name", "")) != only:
-                    continue
+                if only is not None:
+                    tg_ = self.ways[wi].get("tags", {})
+                    if callable(only):
+                        if not only(tg_):
+                            continue
+                    elif norm_name(tg_.get("name", "")) != only:
+                        continue
                 ng = g + c
                 if d0 is not None:
                     d1 = vec(u, v)
@@ -283,6 +306,13 @@ class Graph:
             out.append((st[0], wi))
             st = pst
         return out[::-1]
+
+
+def layer_of(t):
+    try:
+        return int(str(t.get("layer", "0")).split(";")[0])
+    except ValueError:
+        return 0
 
 
 def norm_name(s):
@@ -314,18 +344,23 @@ def remove_loops(seq, G, max_len=1600.0):
 def build_route_graph(key, c):
     """Ruta por las calles reales de OSM pasando por los puntos dibujados."""
     cal = fit_affine(c["ref"])
-    wps = [px_to_ll(r[0] if isinstance(r[0], tuple) else r, cal) for r in c["route"]]
-    wnames = [r[1] if isinstance(r[0], tuple) and len(r) > 1 else None for r in c["route"]]
+    if c.get("ll"):                                   # ruta dada en coordenadas reales (lat, lon, calle)
+        wps = [(r[0], r[1]) for r in c["route"]]
+        wnames = [r[2] if len(r) > 2 else None for r in c["route"]]
+    else:
+        wps = [px_to_ll(r[0] if isinstance(r[0], tuple) else r, cal) for r in c["route"]]
+        wnames = [r[1] if isinstance(r[0], tuple) and len(r) > 1 else None for r in c["route"]]
     for i, ll in c.get("fixed", {}).items():
         wps[i] = ll
     la = np.array([w[0] for w in wps])
     lo = np.array([w[1] for w in wps])
-    m = 0.008
+    m = c.get("margin", 0.008)
     bbox = (la.min() - m, lo.min() - m, la.max() + m, lo.max() + m)
     hw = "|".join(DRIVE + WALK + ("raceway",))
     q = (f'[out:json][timeout:300];way["highway"~"^({hw})$"]({bbox[0]:.5f},{bbox[1]:.5f},{bbox[2]:.5f},'
          f'{bbox[3]:.5f});out body;>;out skel qt;')
-    G = Graph(overpass(q, key + "_calles"))
+    G = Graph(overpass(q, key + "_calles" + ("" if m == 0.008 else f"_{m}")))
+    G.strict = bool(c.get("strict"))
     # ---- afinar la calibracion de la imagen: cada punto con nombre se 'pega' a su calle real
     pxs = [r[0] if isinstance(r[0], tuple) else r for r in c["route"]]
     segs_by_name = {}
@@ -344,7 +379,7 @@ def build_route_graph(key, c):
         P_ = A_ + D_ * t_[:, None]
         k_ = int(np.argmin(np.hypot(P_[:, 0], P_[:, 1])))
         return (ll[0] + P_[k_, 1] / 110574, ll[1] + P_[k_, 0] / kx0), float(np.hypot(*P_[k_]))
-    for it in range(8):
+    for it in range(0 if c.get("ll") else 8):
         pairs, err = [], []
         for k_, (px, nm) in enumerate(zip(pxs, wnames)):
             if nm and norm_name(nm) in segs_by_name and k_ not in c.get("fixed", {}):
@@ -355,12 +390,12 @@ def build_route_graph(key, c):
             break
         cal = fit_affine(pairs + list(c["ref"]) * 0)
         wps = [px_to_ll(p, cal) for p in pxs]
-    if wnames and any(wnames):
+    if wnames and any(wnames) and not c.get("ll"):
         print(f"   calibracion: error medio {np.mean(err):.0f} m, maximo {np.max(err):.0f} m")
     for i, ll in c.get("fixed", {}).items():
         wps[i] = ll
     # nodos de cada tipo de calle para buscar el mas cercano rapido
-    ids, xy, cls, nms, dirs, ows = [], [], [], [], [], []
+    ids, xy, cls, nms, dirs, ows, lys = [], [], [], [], [], [], []
     kx = 111320 * math.cos(math.radians(float(la.mean())))
     for w in G.ways:
         t_ = w.get("tags", {})
@@ -379,14 +414,20 @@ def build_route_graph(key, c):
             nms.append(nm)
             dirs.append(dv)
             ows.append(ow)
+            lys.append(layer_of(t_))
     ids, xy, cls, nms = np.array(ids), np.array(xy), np.array(cls), np.array(nms)
-    dirs, ows = np.array(dirs), np.array(ows)
+    dirs, ows, lys = np.array(dirs), np.array(ows), np.array(lys)
 
     def snap(ll, allow, name=None, travel=None):
         ok0 = np.isin(cls, allow)
         ok = ok0.copy()
         if travel is not None:                          # calles de un sentido: solo la calzada que va hacia alla
             ok &= ~(ows & ((dirs @ travel) < 0.2))
+        if name == "@arriba":                          # cualquier calzada elevada (segundo piso)
+            okn = ok & (lys >= 2)
+            if okn.any():
+                ok = okn
+            name = None
         if name:
             okn = ok & (nms == norm_name(name))
             if not okn.any():
@@ -408,8 +449,11 @@ def build_route_graph(key, c):
     wnames.append(wnames[0])
     for i in range(len(wps) - 1):
         allow = DRIVE + (WALK if c.get("legs", {}).get(i) == "foot" else ())
+        G.strict = bool(c.get("strict")) and i not in c.get("free_legs", ()) and             not (c.get("free_last") and i == len(wps) - 2)
         def travel(k_):
             a_, b_ = wps[(k_ - 1) % (len(wps) - 1)], wps[(k_ + 1) % (len(wps) - 1)]
+            if k_ % (len(wps) - 1) == 0:                  # la salida: hacia el siguiente punto
+                a_ = wps[0]
             v = np.array([(b_[1] - a_[1]) * kx, (b_[0] - a_[0]) * 110574])
             return v / max(np.hypot(*v), 1e-6)
         a = snap(wps[i], allow, wnames[i], travel(i))
@@ -437,7 +481,12 @@ def build_route_graph(key, c):
             continue
         prv = seq[-2][0] if len(seq) >= 2 else None
         p = None
-        if wnames[i] and wnames[i + 1] and norm_name(wnames[i]) == norm_name(wnames[i + 1]):
+        if wnames[i] == "@arriba" and wnames[i + 1] == "@arriba":
+            try:                                            # el tramo se queda arriba
+                p = G.path(a, b, allow, prev=prv, only=lambda t: layer_of(t) >= 2)
+            except RuntimeError:
+                p = None
+        elif wnames[i] and wnames[i + 1] and norm_name(wnames[i]) == norm_name(wnames[i + 1]):
             try:                                            # mismo nombre: el tramo va solo por esa calle
                 p = G.path(a, b, allow, prev=prv, only=norm_name(wnames[i]))
             except RuntimeError:

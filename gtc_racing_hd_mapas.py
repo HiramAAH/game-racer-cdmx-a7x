@@ -101,7 +101,7 @@ class MapDef:
                  extras=("papel",), stands=4, bridges=2, pits=True, builder="auto", venue=None, landmarks=(),
                  urban=False, ped_bridges=0, fans=0.75, signs=None, band_sign=10, music_dir="music",
                  palette=None, fireworks=False, pads=0, city_margin=750.0, city_step=34.0, detail_dist=400.0,
-                 osm=None, datum=None, fan_rate=0.45, fan_density=1.0, forest=0):
+                 osm=None, datum=None, fan_rate=0.45, fan_density=1.0, forest=0, tropical=None):
         self.key, self.name, self.subtitle = key, name, subtitle
         self.control, self.scale = list(control), scale
         self.stadium, self.stadium_scale = stadium, stadium_scale
@@ -120,6 +120,7 @@ class MapDef:
         self.city_margin, self.city_step, self.detail_dist = city_margin, city_step, detail_dist
         self.osm, self.datum = osm, datum
         self.fan_rate, self.fan_density, self.forest = fan_rate, fan_density, forest
+        self.tropical = tropical          # dict(town=(x, z, radio) en unidades de 'control')
         self.length = None
 
     def w(self, p):
@@ -159,6 +160,13 @@ SLP_ROUTE = [
     (414, 618), (425, 598), (437, 580), (450, 550), (461, 527), (470, 500), (472, 460), (469, 422), (470, 402),
     (488, 393), (530, 390), (575, 388), (640, 382), (660, 352), (680, 320), (700, 287), (716, 255), (722, 235),
     (731, 216), (746, 206), (760, 214), (758, 238)]
+
+# Cozumel (trazo del usuario, escala compacta): centro de San Miguel, costa oriente, Punta Sur y costa poniente
+COZUMEL_ROUTE = [(348, 96), (365, 103), (380, 92), (400, 100), (425, 128), (460, 140), (500, 175), (540, 215),
+                 (580, 250), (620, 290), (655, 318), (658, 345), (630, 370), (600, 405), (575, 440), (555, 460),
+                 (520, 540), (490, 570), (465, 585), (440, 620), (410, 660), (370, 690), (330, 710), (310, 730),
+                 (290, 725), (265, 690), (230, 640), (185, 595), (160, 540), (152, 500), (150, 450), (158, 400),
+                 (170, 350), (200, 305), (240, 265), (265, 225), (285, 190), (282, 160), (300, 110), (330, 82)]
 
 MAPS = [
     MapDef("cdmx", "ESTADIO GNP SEGUROS", "Autódromo · concierto de Avenged Sevenfold",
@@ -216,6 +224,24 @@ MAPS = [
                   9: ((20, 20, 24), (60, 60, 70), "AUTÓDROMO TANGAMANGA", (255, 215, 40)),
                   2: ((200, 30, 40), (240, 60, 60), "¡VAMOS SAN LUIS!", (255, 255, 255))},
            music_dir="music_feria"),
+    MapDef("segundopiso", "PERIFÉRICO · SEGUNDO PISO", "CDMX · Periférico Sur abajo y el Segundo Piso arriba",
+           control=SLP_ROUTE, scale=5.5, laps=1, concert=False, builder="osm", osm="segundopiso", urban=True,
+           fans=0.8, extras=("papel",), fireworks=True,
+           signs={1: ((20, 40, 90), (40, 80, 160), "SEGUNDO PISO", (255, 255, 255)),
+                  2: ((10, 90, 50), (30, 140, 80), "PERIFÉRICO SUR", (255, 255, 255)),
+                  9: ((200, 0, 110), (240, 40, 150), "CDMX", (255, 255, 255))},
+           music_dir="music"),
+    MapDef("cozumel", "ISLA DE COZUMEL", "Caribe mexicano · selva, mar y carnaval",
+           control=COZUMEL_ROUTE, scale=6.5, laps=1, concert=True, builder="calles", urban=True,
+           ped_bridges=2, fans=0.6, extras=("papel",), fireworks=True, volcanoes=False, mountains=False,
+           tropical=dict(town=(355, 110, 75)), city_margin=250.0,
+           venue=dict(name="SAN MIGUEL DE COZUMEL", band="CARNAVAL DE COZUMEL", tag="¡A BAILAR!",
+                      pos=(395, 145), r0=45, kind="fanfest"),
+           signs={1: ((0, 150, 170), (40, 200, 210), "COZUMEL", (255, 255, 255)),
+                  9: ((230, 60, 140), (250, 120, 40), "¡VIVA EL CARNAVAL!", (255, 255, 255)),
+                  10: ((120, 20, 160), (230, 60, 140), "CARNAVAL DE COZUMEL", (255, 230, 60)),
+                  14: ((10, 10, 10), (120, 20, 160), "HOY: GRAN DESFILE", (255, 230, 60))},
+           band_sign=10, music_dir="music_feria"),
     # --- aqui van las pistas nuevas ---
 ]
 
@@ -795,6 +821,28 @@ def building_hd(g, crowd, rnd, c, f, o, hl, hdp, h, col, shop=True, roof_fans=Fa
         for _ in range(rnd.randint(3, 8)):
             p = F + f * rnd.uniform(-hl + 0.8, hl - 0.8) + o * rnd.uniform(0.6, 2.2)
             crowd.add(p[0], h, p[1], -o[0], -o[1], rnd)
+
+
+def palm_hd(g, x, z, s, rnd, lean=None):
+    """Palmera: tronco curvo e inclinado y penacho de hojas."""
+    a = rnd.uniform(0, TAU) if lean is None else lean
+    dx, dz = math.cos(a), math.sin(a)
+    pts_ = [(x + dx * (t * t) * 2.2 * s, t * 8.5 * s, z + dz * (t * t) * 2.2 * s) for t in np.linspace(0, 1, 5)]
+    for (x0, y0, z0), (x1, y1, z1) in zip(pts_[:-1], pts_[1:]):
+        cylinder(g, (x0, y0, z0), (x1, y1, z1), 0.22 * s, rgb(130, 105, 75), mat(M_BARK, 0.9), seg=5, caps=False)
+    tx, ty, tz = pts_[-1]
+    leaf = rgb(*[int(v * rnd.uniform(0.85, 1.1)) for v in (40, 120, 45)])
+    for k in range(7):
+        b = k / 7 * TAU + rnd.uniform(-0.2, 0.2)
+        ux, uz = math.cos(b), math.sin(b)
+        px, pz = -uz, ux
+        L = 3.6 * s
+        mx, my, mz = tx + ux * L * 0.55, ty + 0.5 * s, tz + uz * L * 0.55
+        ex, ey, ez = tx + ux * L, ty - 1.6 * s, tz + uz * L
+        w = 0.55 * s
+        quad(g, (tx, ty, tz), (mx + px * w, my, mz + pz * w), (ex, ey, ez), (mx - px * w, my, mz - pz * w), leaf,
+             mat(M_LEAF, 0.8))
+    sphere(g, (tx, ty - 0.3 * s, tz), 0.35 * s, rgb(110, 80, 40), mat(M_DEF, 0.7), seg=6, rings=3)
 
 
 def forest_tree(g, x, z, s, rnd):
@@ -1742,7 +1790,16 @@ def build_world_streets(track, md):
     xs = np.linspace(cxm - G, cxm + G, 41)
     zs = np.linspace(czm - G, czm + G, 41)
     X, Z = np.meshgrid(xs, zs, indexing="ij")
-    grid(g, np.stack([X, np.zeros_like(X), Z], -1), rgb(112, 112, 108), mat(M_CONC, 0.85), orient=(0, 1, 0))
+    if md.tropical:
+        grid(g, np.stack([X, np.zeros_like(X), Z], -1), rgb(60, 105, 40), mat(M_GRASS, 0.95), orient=(0, 1, 0))
+        tw = md.tropical["town"]
+        town_c, town_r = md.w(tw[:2]), tw[2] * md.scale
+
+        def in_town(q):
+            q = np.asarray(q, float).reshape(-1, 2)
+            return np.hypot(q[:, 0] - town_c[0], q[:, 1] - town_c[1]) < town_r
+    else:
+        grid(g, np.stack([X, np.zeros_like(X), Z], -1), rgb(112, 112, 108), mat(M_CONC, 0.85), orient=(0, 1, 0))
     # ---- lugares reservados: salida, puentes peatonales e intersecciones
     bridges = pick_spots(track, md.ped_bridges, avoid, 40, 1 / 400, LIMIT + 19, offset=0.5) if md.ped_bridges else []
     ncross = max(16, int(track.L / 430))
@@ -2140,6 +2197,9 @@ def build_world_streets(track, md):
             c = np.array([x, z]) + o * (WALK + 0.4 + dp / 2)
             corners = np.array([c + f * a + o * b for a in (-w / 2, w / 2) for b in (-dp / 2, dp / 2)] + [c - o * dp / 2])
             cells = occ.cells(c, f, w / 2, dp / 2)
+            if md.tropical and not in_town(c)[0]:
+                s += 4.0
+                continue
             if (track.nearest_dist(corners) >= WALK - 0.8).all() and occ.free(cells) and \
                     not (zones.hit(corners) | openz.hit(corners)).any():
                 h = rnd.choice(STORIES) * 3.6 + 0.4
@@ -2171,6 +2231,8 @@ def build_world_streets(track, md):
     C = np.column_stack([gx.ravel(), gz.ravel()]) + np.array([[rnd.uniform(-6, 6), rnd.uniform(-6, 6)]])
     D = track.nearest_dist(C)
     blocked = zones.hit(C) | openz.hit(C)
+    if md.tropical:
+        blocked |= ~in_town(C)
     yaw0 = rnd.uniform(0, TAU)
     for c, dist, bl in zip(C, D, blocked):
         if bl or dist < WALK + 26:
@@ -2229,6 +2291,42 @@ def build_world_streets(track, md):
         d0 = span + 3300
         mountain_hd(g, cxm + d0, czm + 1000, 1900, 1350, rnd, snow=1.0, seg=36, rings=14)
         mountain_hd(g, cxm + d0 - 300, czm - 1000, 2300, 1100, rnd, snow=1.0, seg=36, rings=14)
+    if md.tropical:
+        cen = pts.mean(0)
+        outer = np.sign(((pts - cen) * nrm).sum(1))                       # lado que da al mar
+        coast = ~in_town(pts)
+        coast = np.convolve(coast.astype(float), np.ones(15), "same") > 7
+        for r in hd.runs(coast):
+            for side in (-1, 1):
+                rr = r[outer[r] == side]
+                if len(rr) < 3:
+                    continue
+                for rr2 in np.split(rr, np.nonzero(np.diff(rr) % n > 1)[0] + 1):
+                    if len(rr2) < 3:
+                        continue
+                    P = hd.offset_grid(track, rr2, [WALK, WALK + 28], 0.045, side)
+                    grid(g, P, rgb(232, 214, 168), mat(M_GRAVEL, 0.95), orient=(0, 1, 0))      # arena
+                    P = hd.offset_grid(track, rr2, [WALK + 28, WALK + 60, WALK + 2500], [0.06, 0.07, 0.07], side)
+                    grid(g, P[[0, 1]], rgb(70, 200, 205), mat(M_DEF, 0.05, 0.3), orient=(0, 1, 0))  # turquesa
+                    grid(g, P[[1, 2]], rgb(25, 95, 150), mat(M_DEF, 0.05, 0.3), orient=(0, 1, 0))   # mar abierto
+        for i in range(0, n, 3):
+            if not coast[i]:
+                continue
+            for side in (-1, 1):
+                if side == outer[i]:                                       # palmeras en la playa
+                    if rnd.random() < 0.75:
+                        q = pts[i] + nrm[i] * side * rnd.uniform(WALK + 2, WALK + 24) + tan[i] * rnd.uniform(-3, 3)
+                        if track.nearest_dist(q[None])[0] > WALK:
+                            palm_hd(g, q[0], q[1], rnd.uniform(0.85, 1.25), rnd,
+                                    lean=math.atan2(nrm[i, 1] * side, nrm[i, 0] * side) + rnd.uniform(-0.6, 0.6))
+                else:                                                      # selva
+                    for _ in range(2):
+                        q = pts[i] + nrm[i] * side * rnd.uniform(WALK, WALK + 70) + tan[i] * rnd.uniform(-4, 4)
+                        if track.nearest_dist(q[None])[0] > WALK - 1:
+                            if rnd.random() < 0.3:
+                                palm_hd(g, q[0], q[1], rnd.uniform(0.8, 1.2), rnd)
+                            else:
+                                forest_tree(g, q[0], q[1], rnd.uniform(1.0, 1.6), rnd)
     # ---- mucho publico en las banquetas
     for side in (1, -1):
         idx = np.arange(0, n, 3)
@@ -2352,10 +2450,13 @@ class OSMTrack(MapTrack):
         delta = np.zeros(n)
         fixed = np.zeros(n, bool)
         dh = h0[J] - h0[I]
-        flat = np.abs(dh) < 5.0
+        grade = np.abs(off0[I] - off0[J]) > 2.0                 # una es puente y la otra no: a desnivel
+        flat = (np.abs(dh) < 5.0) & ~grade
         delta[I[flat]] = 0.5 * (h0[I[flat]] + h0[J[flat]]) - h0[I[flat]] + np.where(I[flat] > J[flat], 0.03, 0.0)
         fixed[I[flat]] = True
-        up = ~flat & (dh < 0) & (np.abs(dh) < 7.5)          # i va arriba de j: subir i
+        upper_i = np.where(grade, off0[I] > off0[J], dh < 0)
+        up = ~flat & upper_i & (np.abs(dh) < 7.5)            # i va arriba de j: subir i
+        dh = np.where(grade & upper_i, -np.maximum(h0[I] - h0[J], 0.0), dh)
         delta[I[up]] = 7.5 - np.abs(dh[up])
         fixed[I[up]] = True
         for _ in range(6):                                  # la zona igualada se extiende 18 m mas
@@ -2810,6 +2911,8 @@ def build_world_osm(track, md):
     shared = np.zeros((n, 2), bool)                                        # lado donde la ruta vuelve a pasar
     for i in np.nonzero(track.partner >= 0)[0]:
         j = track.partner[i]
+        if abs(h[i] - h[j]) > 2.5:                                         # una va encima de la otra: no se comparte
+            continue
         if abs(tan[i] @ tan[j]) < 0.85:                                    # cruce en X: los dos lados
             shared[i, :] = True
         else:
@@ -3050,7 +3153,7 @@ def build_world_osm(track, md):
                     for k_ in rng_:
                         prv = k_ - 1 if rng_.step == 1 else k_ + 1
                         yy[k_] = max(yy[k_], yy[prv] - 0.12 * float(np.hypot(*(P[k_] - P[prv]))))
-            inside = par_c & (dd < rw[ic] + wh * 0.8 - 0.4)
+            inside = par_c                                                 # puente paralelo a la ruta: no se dibuja
         occ_pts = []
         nr_ = (ii >= 0) & (dd < 40)
         if nr_.any() and not w.get("b"):
@@ -3306,6 +3409,8 @@ def build_world_osm(track, md):
                     g.merge(lift_geo(tg, h[k] + 0.25))
     for i in np.nonzero(track.partner >= 0)[0]:                           # la calzada vecina tambien es calle
         j = track.partner[i]
+        if abs(h[i] - h[j]) > 2.5:
+            continue
         wall_ = wpos if track.partner_side[i] > 0 else wneg
         wall_[i] = max(wall_[i], min(track.partner_d[i] + rw[j] + 1.0, rw[i] + 14.0))
     track.wpos, track.wneg = wpos, wneg
