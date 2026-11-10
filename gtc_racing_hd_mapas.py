@@ -49,6 +49,9 @@ import pygame
 
 import gtc_racing_3d as base
 import gtc_racing_hd as hd
+from gtc_menu import MenuMixin
+from gtc_chase import ChaseMixin
+from gtc_split import SplitMixin
 from gtc_racing_hd import (Geo, Crowd, grid, quad, obox, box, cylinder, frame_box, rgb, mat, norm, F4, TAU, HW, LIMIT,
                            CURB_W, PILOTS, DIFFS, TOD_HD, WIN_W, WIN_H, ACCENT, ORANGE, smooth, font,
                            M_GRASS, M_GRAVEL, M_CONC, M_FACADE, M_LAMP, M_SIGN, M_METAL, M_LED, SPONSORS_HD, bb_uv,
@@ -101,7 +104,7 @@ class MapDef:
                  extras=("papel",), stands=4, bridges=2, pits=True, builder="auto", venue=None, landmarks=(),
                  urban=False, ped_bridges=0, fans=0.75, signs=None, band_sign=10, music_dir="music",
                  palette=None, fireworks=False, pads=0, city_margin=750.0, city_step=34.0, detail_dist=400.0,
-                 osm=None, datum=None, fan_rate=0.45, fan_density=1.0, forest=0, tropical=None):
+                 osm=None, datum=None, fan_rate=0.45, fan_density=1.0, forest=0, tropical=None, nitro=None):
         self.key, self.name, self.subtitle = key, name, subtitle
         self.control, self.scale = list(control), scale
         self.stadium, self.stadium_scale = stadium, stadium_scale
@@ -120,6 +123,7 @@ class MapDef:
         self.city_margin, self.city_step, self.detail_dist = city_margin, city_step, detail_dist
         self.osm, self.datum = osm, datum
         self.fan_rate, self.fan_density, self.forest = fan_rate, fan_density, forest
+        self.nitro = nitro                # dict: nitro reforzado y rampas de recarga en la carretera
         self.tropical = tropical          # dict(town=(x, z, radio) en unidades de 'control')
         self.length = None
 
@@ -241,6 +245,8 @@ MAPS = [
            venue=dict(name="SAN MIGUEL DE COZUMEL", band="CARNAVAL DE COZUMEL", tag="¡A BAILAR!",
                       lm="start", at=90, side=1, r0=45, kind="fanfest", carnaval=True),
            landmarks=["fanfest"],
+           nitro=dict(time=6.0, accel=2.4, vmax=1.4, recharge=0.10, pad_every=300.0, pad_fill=1.0, pad_push=10.0,
+                      ai=True),
            signs={1: ((0, 150, 170), (40, 200, 210), "COZUMEL", (255, 255, 255)),
                   9: ((230, 60, 140), (250, 120, 40), "¡VIVA EL CARNAVAL!", (255, 255, 255)),
                   10: ((120, 20, 160), (230, 60, 140), "CARNAVAL DE COZUMEL", (255, 230, 60)),
@@ -1388,6 +1394,26 @@ def turbo_pad_hd(g, track, i):
             P = [(end[0], 0.085, end[1]), (tip[0], 0.085, tip[1]), (tip[0] + w[0], 0.085, tip[1] + w[1]),
                  (end[0] + w[0], 0.085, end[1] + w[1])]
             quad_dir(g, *P, (0.15, 1.0, 0.55), mat(M_EMIS, 0.4, 0, 3.5), (0, 1, 0))
+
+
+def nitro_pad_osm(g, track, i, lights):
+    """Rampa de nitro en la carretera: chevrones azules que brillan y dos postes de luz."""
+    p, t, nr = track.pts[i], track.tan[i], track.nrm[i]
+    y, w_ = float(track.h[i]) + 0.09, float(track.rw[i]) - 0.6
+    for k in range(5):
+        a = k * 3.4
+        for sgn in (-1, 1):
+            tip = p + t * (a + 2.6)
+            end = p + t * a + nr * sgn * w_
+            w = t * 1.0
+            P = [(end[0], y, end[1]), (tip[0], y, tip[1]), (tip[0] + w[0], y, tip[1] + w[1]),
+                 (end[0] + w[0], y, end[1] + w[1])]
+            quad_dir(g, *P, (0.2, 0.75, 1.0) if k % 2 else (0.15, 1.0, 0.55), mat(M_EMIS, 0.4, 0, 4.0), (0, 1, 0))
+    for sgn in (-1, 1):
+        q = p + t * 7 + nr * sgn * (w_ + 1.4)
+        fcyl(g, q[0], q[1], y - 0.1, y + 3.2, 0.16, rgb(40, 40, 46), mat(M_METAL, 0.4, 0.7), seg=6)
+        fcyl(g, q[0], q[1], y + 3.2, y + 4.0, 0.3, (0.25, 0.8, 1.0), mat(M_EMIS, 0.4, 0, 6.0), seg=8)
+    lights.append((float(p[0] + t[0] * 7), y + 3.0, float(p[1] + t[1] * 7), 22.0, 0.3, 0.8, 1.0, 3.0))
 
 
 def lift_crossings(geo, track):
@@ -3925,6 +3951,21 @@ def build_world_osm(track, md):
     if trop:
         tropical_osm(g, track, md, rnd, lights, info, town_m, ds_at, gh, sea_y, wpos, wneg, mouth, shared,
                      sidx_, bidx, occ, zones, rg, lm, town_c)
+    if md.nitro:
+        every = int(md.nitro.get("pad_every", 300.0) / track.spacing)
+        curvy = np.maximum.reduce([np.abs(np.roll(track.curv, q)) for q in range(-8, 9, 2)])
+        okp = (~town_m if trop else np.ones(n, bool)) & (np.abs(off) < 0.4) & (curvy < 1 / 350)
+        okp[:int(150 / track.spacing)] = False                             # no en la salida
+        okp[-int(80 / track.spacing):] = False
+        pads, last = [], -10 ** 9
+        for i in range(n):
+            if okp[i] and okp[min(i + 6, n - 1)] and i - last >= every:
+                pads.append(i)
+                last = i
+        for i in pads:
+            nitro_pad_osm(g, track, i, lights)
+        info["pads"] = np.array(pads, int)
+        print(f"   nitro: {len(pads)} rampas de recarga")
     # ---------------------------------------------------------------- salida, adornos, horizonte, montanas
     start_arch(g, track, info, lights)
     if "papel" in md.extras or "banderines" in md.extras:
@@ -4299,6 +4340,41 @@ def shift_info(inf, dy):
             inf[k] = [(p[0], p[1] + dy, p[2]) for p in inf[k]]
 
 
+_NITRO_BASE = (base.NITRO_TIME, base.NITRO_ACCEL, base.NITRO_VMAX, base.NITRO_RECHARGE)
+
+
+def apply_nitro(md):
+    """Nitro del mapa: los valores del juego base, o los reforzados del mapa (Cozumel)."""
+    t, a, v, r = _NITRO_BASE
+    nz = md.nitro or {}
+    base.NITRO_TIME = nz.get("time", t)
+    base.NITRO_ACCEL = nz.get("accel", a)
+    base.NITRO_VMAX = nz.get("vmax", v)
+    base.NITRO_RECHARGE = nz.get("recharge", r)
+
+
+METAL_DIR = os.path.join(hd.HERE, "music_metal")
+
+
+def metal_title(path):
+    """Titulo con acentos de una cancion de music_metal (si viene de gtc_metal.SONGS)."""
+    try:
+        import gtc_metal
+        f = os.path.basename(path)
+        return next((sg["title"] for sg in gtc_metal.SONGS if sg["file"] == f), hd.clean_song_name(path))
+    except Exception:
+        return hd.clean_song_name(path)
+
+
+def install_autos():
+    """Autos nuevos y modelos mejorados (gtc_autos.py), si esta el archivo."""
+    try:
+        import gtc_autos
+        gtc_autos.install()
+    except Exception as e:                       # sin el modulo: los 6 autos de siempre
+        print("(aviso) autos nuevos no disponibles:", e)
+
+
 def make_track(md):
     return OSMTrack(md) if md.osm else MapTrack(md)
 
@@ -4335,8 +4411,9 @@ ORIG_CHUNKS = hd.StaticChunks
 SONG_EXT = (".mp3", ".ogg", ".wav", ".flac")
 
 
-class GameMaps(hd.GameHD):
+class GameMaps(SplitMixin, ChaseMixin, MenuMixin, hd.GameHD):
     def __init__(self, headless=False, map_key=None):
+        install_autos()
         for m in MAPS:                                   # largo de cada pista (para el selector)
             m.length = make_track(m).L
         self.map_i = map_index(map_key) if map_key and map_index(map_key) is not None else 0
@@ -4349,10 +4426,14 @@ class GameMaps(hd.GameHD):
         hd.build_world = build_world_for
         hd.StaticChunks = self._chunks
         hd.LAPS = MAPS[self.map_i].laps
+        apply_nitro(MAPS[self.map_i])
         self.apply_signs(MAPS[self.map_i], upload=False)
         super().__init__(headless)
         self._wrap_fx()
         self.setup_planes()
+        self.sel = next((i for i, p in enumerate(PILOTS) if p["name"] == "PILOTO GTC"), len(PILOTS) - 1)
+        self.menu_init()
+        self.split_init()
         self.apply_music()
         if not headless:
             pygame.display.set_caption(f"GTC Racing HD - {MAPS[self.map_i].name}")
@@ -4393,17 +4474,39 @@ class GameMaps(hd.GameHD):
             self.R.atlas.write(hd.make_atlas_hd())
             self.R.atlas.build_mipmaps()
 
-    def apply_music(self):
-        """Soundtrack de noche de este mapa (carpeta music_dir)."""
-        folder = os.path.join(hd.HERE, self.md.music_dir)
+    @staticmethod
+    def _songs(folder):
         try:
-            pl = [os.path.join(folder, f) for f in sorted(os.listdir(folder)) if f.lower().endswith(SONG_EXT)]
+            return [os.path.join(folder, f) for f in sorted(os.listdir(folder)) if f.lower().endswith(SONG_EXT)]
         except OSError:
-            pl = []
-        self.music.playlist = pl
+            return []
+
+    def apply_music(self):
+        """Soundtrack: metal (music_metal) en menus y de dia; de noche la banda del mapa (music_dir) si hay canciones."""
+        self.night_pl = self._songs(os.path.join(hd.HERE, self.md.music_dir))
+        self.metal_pl = self._songs(METAL_DIR)
         self.music.cur = None
+        self.update_music_choice()
+
+    def wanted_playlist(self):
+        racing = self.state not in ("menu", "select", "lobby", "browse")
+        if self.tod == 2 and racing and self.night_pl:
+            return self.night_pl
+        return self.metal_pl or self.night_pl
+
+    def update_music_choice(self):
+        if not hasattr(self, "metal_pl"):
+            return
+        pl = self.wanted_playlist()
+        if pl != self.music.playlist:
+            self.music.playlist = pl
+            self.music.cur = None
+            if self.music.mode == "playlist":
+                self.music.next_song()
 
     def music_mode(self):
+        if getattr(self, "metal_pl", None):                         # siempre la playlist (metal o la banda)
+            return "playlist"
         m = super().music_mode()
         if m == "playlist" and not self.music.playlist:          # aun sin canciones de la banda
             return "ambience" if self.state in ("intro", "countdown") else "race"
@@ -4511,21 +4614,24 @@ class GameMaps(hd.GameHD):
         thr, brk, st, hb, nitro = super().player_inputs()
         p = self.player
         v = abs(p.vf)
+        cfg = getattr(self, "cfg", {})
         dt = getattr(self, "_frame_dt", 1 / 60)
         # 1) la tecla no salta a tope: rampa mas lenta a mayor velocidad (los toques cortos corrigen poquito)
         hi = hd.clamp((v - 20.0) / 50.0, 0.0, 1.0)
-        cur = getattr(self, "_st_in", 0.0)
+        cur = getattr(self, "_st_in", 0.0) or 0.0
         if st != 0 and st * cur >= 0 and abs(st) > abs(cur):
             rate = 1.0 / (0.06 + 0.24 * hi)                 # 0.06 s a baja velocidad, 0.30 s a tope
+            rate *= cfg.get("steer_speed", 1.0)
         else:
             rate = 9.0                                      # soltar o cambiar de lado: rapido
         cur += hd.clamp(st - cur, -rate * dt, rate * dt)
         self._st_in = cur
         cur = st + (cur - st) * hi                          # a baja velocidad: exactamente como siempre
         # 2) la misma fraccion de volante = la misma fraccion del agarre, a cualquier velocidad
-        if v > self.STEER_V0 and not hb:
+        if v > self.STEER_V0 and not hb and cfg.get("steer_assist", True):
             k = min(1.0, self._steer_sat(v, p.grip) / self._steer_sat(self.STEER_V0, p.grip))
             cur *= k
+        cur = hd.clamp(cur * cfg.get("steer_sens", 1.0), -1.0, 1.0)  # sensibilidad (configuracion)
         return thr, brk, cur, hb, nitro
 
     def car_pitch(self, c):
@@ -4697,6 +4803,7 @@ class GameMaps(hd.GameHD):
         if self.net and self.net.connected(6.0):
             self.net.last_rx = time.time()        # el otro jugador siguio conectado durante la carga
         hd.LAPS = md.laps
+        apply_nitro(md)
         self.apply_music()
         self.fx.info = self.info
         self.fx.p = self.fx.p[:0]
@@ -4760,7 +4867,10 @@ class GameMaps(hd.GameHD):
                 if self.net:
                     self.net.last_rx = time.time()
                 return
+        self.update_music_choice()
         super().update(rdt)
+        if self.frozen:
+            return
         tr = self.track
         if isinstance(tr, OSMTrack):                       # asfalto o banqueta segun la distancia real
             for c in self.cars:
@@ -4777,12 +4887,18 @@ class GameMaps(hd.GameHD):
     def new_race(self, *a, **k):
         super().new_race(*a, **k)
         self._fix_grid()
+        if getattr(self, "chase", None) and self.state != "menu":   # modo persecucion: fugitivo adelante, patrullas atras
+            self.chase_place()
 
     def new_race_mp(self, order):
         super().new_race_mp(order)
         self._fix_grid()
 
     def _fix_grid(self):
+        if self.md.nitro and self.md.nitro.get("ai"):                     # los rivales tambien usan el nitro
+            for c in self.cars:
+                if not c.is_player:
+                    c.nitro_ai = True
         tr = self.track
         if not isinstance(tr, OSMTrack):
             return
@@ -4816,14 +4932,17 @@ class GameMaps(hd.GameHD):
             for c in self.cars:
                 if getattr(c, "remote", False):
                     continue
-                hit = pads[(c.idx - pads) % n < 4]
-                if len(hit) and abs(c.lat) < HW and getattr(c, "_pad", -1) != int(hit[0]):
+                hit = pads[(c.idx - pads) % n < 6]
+                lim = float(self.track.rw[c.idx]) if hasattr(self.track, "rw") else HW
+                if len(hit) and abs(c.lat) < lim and getattr(c, "_pad", -1) != int(hit[0]):
                     c._pad = int(hit[0])
-                    c.nitro = min(1.0, c.nitro + 0.5)
-                    c.vx += math.cos(c.ang) * 7.0           # empujon hacia adelante
-                    c.vz += math.sin(c.ang) * 7.0
+                    nz = md.nitro or {}
+                    c.nitro = min(1.0, c.nitro + nz.get("pad_fill", 0.5))
+                    push = nz.get("pad_push", 7.0)
+                    c.vx += math.cos(c.ang) * push           # empujon hacia adelante
+                    c.vz += math.sin(c.ang) * push
                     if c.is_player:
-                        self.show("¡TURBO!", 0.9)
+                        self.show("¡NITRO!" if md.nitro else "¡TURBO!", 0.9)
 
     def build_intro(self):
         super().build_intro()
@@ -4834,7 +4953,7 @@ class GameMaps(hd.GameHD):
     # ------------------------------------------------------------ entrada
     def handle_key(self, key):
         st = self.state
-        if st == "select" or (st == "lobby" and self.mp == "host"):
+        if (st == "select" and not self.tour and not self.paused and not self.cfg_open) or                 (st == "lobby" and self.mp == "host"):
             if key in (pygame.K_q, pygame.K_e):
                 self.map_sel = (self.map_sel + (1 if key == pygame.K_e else -1)) % len(MAPS)
                 return True
@@ -4864,8 +4983,7 @@ class GameMaps(hd.GameHD):
                      italic=False)
 
     def hud_select(self):
-        super().hud_select()
-        self.map_panel(WIN_W - 580, 36)
+        self.hud_select_menu(self.map_panel)
 
     def hud_lobby(self):
         super().hud_lobby()
@@ -4909,7 +5027,9 @@ class GameMaps(hd.GameHD):
         mu = self.music
         if mu.mode == "playlist" and mu.now and mu.np_t < 7 and not self.sound.muted:
             a = int(255 * hd.clamp(min(mu.np_t / 0.5, (7 - mu.np_t) / 1.0), 0, 1))
-            s = f"♪  {self.md.band}  —  {mu.now}" + ("  (8-bit)" if self.md.music_dir == "music" else "")
+            metal = bool(mu.cur) and os.path.dirname(mu.cur) == METAL_DIR
+            s = (f"♪  RADIO GTC METAL  —  {metal_title(mu.cur)}" if metal else
+                 f"♪  {self.md.band}  —  {mu.now}" + ("  (8-bit)" if self.md.music_dir == "music" else ""))
             w = font(22).size(s)[0] + 60
             self.panel((WIN_W // 2 - w // 2, y, w, 40), int(a * 0.75), accent=(240, 40, 40))
             self.txt(s, 22, (255, 225, 90), (WIN_W // 2 + 6, y + 20), "center", alpha=a)

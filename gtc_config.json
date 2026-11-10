@@ -1,0 +1,47 @@
+{
+ "keys": {
+  "acelerar": [
+   1073741906,
+   119
+  ],
+  "frenar": [
+   1073741905,
+   115
+  ],
+  "izquierda": [
+   1073741904,
+   97
+  ],
+  "derecha": [
+   1073741903,
+   100
+  ],
+  "nitro": [
+   1073742049,
+   120
+  ],
+  "derrape": [
+   32,
+   null
+  ],
+  "camara": [
+   99,
+   null
+  ],
+  "cancion": [
+   1073742048,
+   1073742052
+  ]
+ },
+ "steer_sens": 1.0,
+ "steer_speed": 1.0,
+ "steer_assist": true,
+ "quality": 2,
+ "show_fps": false,
+ "cam": 0,
+ "shake": true,
+ "fps": 60,
+ "music_vol": 0.6,
+ "fx_vol": 1.0,
+ "muted": false
+}
