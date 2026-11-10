@@ -16,6 +16,7 @@ import pygame
 import gtc_racing_hd as hd
 from gtc_racing_hd import (PILOTS, DIFFS, QUALITY, TOD_HD, ACCENT, ORANGE, WIN_W, WIN_H, font, clamp, fmt_time)
 
+VERSION = "1.0.0"
 CFG_PATH = os.path.join(hd.HERE, "gtc_config.json")
 
 # acciones de manejo -> dos teclas cada una
@@ -563,6 +564,7 @@ class MenuMixin:
             self.panel((50, WIN_H - 140, 760, 50), 150, slant=14)
             self.txt(desc, 20, (215, 225, 238), (76, WIN_H - 126), italic=False)
         self.panel((0, WIN_H - 64, WIN_W, 64), 150, slant=0)
+        self.txt(f"v{VERSION}", 16, (150, 165, 185), (WIN_W - 16, WIN_H - 32), "midright", italic=False)
         self.txt("↑ ↓  elegir      ENTER  aceptar      ESC  volver      M  sonido", 19, (200, 210, 225),
                  (WIN_W // 2, WIN_H - 32), "center", italic=False, fname="segoeui,arial")
         self.song_banner(18)

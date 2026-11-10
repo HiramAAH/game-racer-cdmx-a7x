@@ -49,7 +49,7 @@ import pygame
 
 import gtc_racing_3d as base
 import gtc_racing_hd as hd
-from gtc_menu import MenuMixin
+from gtc_menu import MenuMixin, VERSION
 from gtc_chase import ChaseMixin
 from gtc_split import SplitMixin
 from gtc_racing_hd import (Geo, Crowd, grid, quad, obox, box, cylinder, frame_box, rgb, mat, norm, F4, TAU, HW, LIMIT,
@@ -4436,7 +4436,7 @@ class GameMaps(SplitMixin, ChaseMixin, MenuMixin, hd.GameHD):
         self.split_init()
         self.apply_music()
         if not headless:
-            pygame.display.set_caption(f"GTC Racing HD - {MAPS[self.map_i].name}")
+            pygame.display.set_caption(f"GTC Racing HD v{VERSION} - {MAPS[self.map_i].name}")
 
     @property
     def md(self):
@@ -4814,7 +4814,7 @@ class GameMaps(SplitMixin, ChaseMixin, MenuMixin, hd.GameHD):
         self.R.static_key = None
         self.loading("¡Listo!", 1.0)
         if not self.headless:
-            pygame.display.set_caption(f"GTC Racing HD - {md.name}")
+            pygame.display.set_caption(f"GTC Racing HD v{VERSION} - {md.name}")
         if keep_state:
             if self.mp == "guest":
                 self.rid = 0            # el invitado vuelve a esperar la orden de salida del anfitrion
