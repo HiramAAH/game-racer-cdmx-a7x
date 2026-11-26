@@ -319,6 +319,12 @@ class SplitMixin:
         if act is None:
             return True
         iid, a = act
+        if getattr(self, "wait_key", None) is not None:              # reasignando una TECLA: el control no cuenta
+            if a in ("b", "back"):
+                self.wait_key = None
+            else:
+                self.toast, self.toast_t = "PRESIONA UNA TECLA DEL TECLADO (los botones del control son fijos)", 2.5
+            return True
         if self.state == "menu" and self.page == "local" and not self.cfg_open:
             return self.local_action(iid, a)
         racing = self.state in ("intro", "countdown", "race", "finished") and not self.paused and not self.cfg_open

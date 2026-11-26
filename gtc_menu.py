@@ -142,7 +142,15 @@ class MenuMixin:
     # ------------------------------------------------------------ manejo con las teclas configuradas
     def player_inputs(self):
         k = pygame.key.get_pressed()
-        on = lambda a: any(k[q] for q in self.keys_of(a) if 0 <= q < len(k))
+
+        def down(q):
+            # OJO: las flechas, Shift y Ctrl tienen codigos enormes (K_UP = 1073741906); el arreglo de pygame los
+            # acepta como indice aunque su len() sea 512, asi que no se deben filtrar por tamano.
+            try:
+                return bool(k[q])
+            except (IndexError, KeyError, TypeError):
+                return False
+        on = lambda a: any(down(q) for q in self.keys_of(a))
         st = (1 if on("derecha") else 0) - (1 if on("izquierda") else 0)
         return on("acelerar"), on("frenar"), st, on("derrape"), on("nitro")
 
@@ -413,7 +421,7 @@ class MenuMixin:
             col = getattr(self, "cfg_col", 0)
             if left or right:
                 self.cfg_col = 1 - col
-            elif enter:
+            elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                 self.wait_key = (r[1], col)
             elif key in (pygame.K_BACKSPACE, pygame.K_DELETE):
                 self.cfg["keys"][r[1]][col] = None
